@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root { font-family: 'DM Sans', sans-serif; color: #f7f4ee; background: #0b1015; font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: radial-gradient(ellipse at 65% 5%, #233d4a 0, transparent 55%), #0b1015; }
+button { font: inherit; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 3px solid #a8dfcc; outline-offset: 6px; }
+main { --card-width: clamp(245px, 24vw, 360px); --card-height: calc(var(--card-width) / 1.52); min-height: 100dvh; display: grid; place-items: center; overflow: hidden; padding: 40px 0; }
+.shelf { position: relative; width: 100%; min-width: 0; transition: transform .6s cubic-bezier(.22, 1, .36, 1), opacity .6s ease; }
+.picker-open .shelf { transform: translateY(calc(-50dvh + var(--card-height) / 2 + 32px)); opacity: .5; }
+.cards { display: flex; align-items: center; gap: clamp(24px, 3vw, 44px); padding: 110px max(0px, calc(50% - var(--card-width) / 2)); overflow-x: auto; overflow-anchor: none; scrollbar-width: none; }
+.cards::-webkit-scrollbar { display: none; }
+.card { position: relative; flex: 0 0 var(--card-width); aspect-ratio: 1.52; border: 3px solid #ffffff12; border-radius: 22px; padding: 0; text-align: left; transform: scale(1); transition: opacity .16s ease, transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.card.chosen { z-index: 1; border-color: #edf5ed; box-shadow: 0 0 0 7px #97ccba22, 0 18px 35px #0006; transform: scale(1.13); }
+.add-card { display: grid; place-items: center; background: linear-gradient(145deg, #293b43, #17232c); }
+.add-card:hover { background: linear-gradient(145deg, #344c55, #1c2d37); }
+.plus { font-size: 88px; font-weight: 400; line-height: 1; color: #cde3da; }
+.app-card, .app-surface { background: radial-gradient(ellipse at 80% 0%, var(--app-glow) 0, transparent 65%), var(--app-base); }
+.app-mark { position: absolute; top: 20px; left: 24px; font-size: 56px; line-height: 1; color: var(--app-ink); }
+.card-caption { position: absolute; left: 24px; bottom: 20px; display: grid; gap: 4px; }
+.card-caption strong { font-size: 23px; font-weight: 500; }
+.card-caption small { font-size: 12px; color: #b5ccc0; }
+.picker-stage { position: fixed; inset: 0; z-index: 4; overflow: hidden; }
+.vertical-viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; overscroll-behavior: none; mask-image: linear-gradient(to bottom, transparent 18%, #000 36%, #000 78%, transparent 96%); }
+.vertical-track { --vertical-gap: 38px; position: absolute; top: 50%; left: calc(50% - var(--card-width) / 2); margin-top: calc(var(--card-height) / -2); display: flex; flex-direction: column; gap: var(--vertical-gap); width: var(--card-width); transform: translateY(calc(var(--selected) * -1 * (var(--card-height) + var(--vertical-gap)))); transition: transform .5s cubic-bezier(.22, 1, .36, 1); }
+.picker-card { width: var(--card-width); height: var(--card-height); flex: 0 0 var(--card-height); }
+.picker-back { z-index: 2; }
+.app-open .card { opacity: 0; pointer-events: none; }
+.app-open .card.chosen { visibility: hidden; opacity: 1; }
+.app-open.returning .card:not(.chosen) { opacity: 1; }
+.app-surface { position: fixed; inset: 0; z-index: 10; overflow: hidden; isolation: isolate; }
+.surface-mark { position: absolute; top: 10%; right: 5%; font-size: clamp(160px, 35vw, 540px); color: var(--app-ink); opacity: .05; line-height: 1; }
+.app-content { position: absolute; inset: 0; animation: reveal .18s both; }
+.closing .app-content { animation: dismiss .08s both; pointer-events: none; }
+.back-button { position: absolute; top: clamp(24px, 5vh, 56px); left: clamp(24px, 6vw, 96px); display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0b101540; border: 1px solid #ffffff30; border-radius: 100px; }
+.back-button:hover { background: #ffffff15; }
+kbd { font: inherit; font-size: 10px; padding: 2px 5px; border: 1px solid #ffffff25; border-radius: 4px; }
+.back-button kbd { margin-left: 16px; }
+.agent-workspace { position: absolute; top: 50%; left: clamp(24px, 10vw, 160px); transform: translateY(-50%); width: min(620px, calc(100vw - 48px)); }
+.eyebrow { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #b5ccc0; }
+h1 { font-size: clamp(48px, 8vw, 110px); font-weight: 500; letter-spacing: -.065em; margin: 12px 0; line-height: 1; }
+.welcome { color: #c5d8cf; font-size: clamp(18px, 2vw, 25px); font-weight: 400; }
+.workspace-note { display: flex; gap: 16px; align-items: center; margin-top: 44px; padding: 20px; border: 1px solid #ffffff20; border-radius: 16px; background: #0b101525; }
+.workspace-note > span { color: var(--app-ink); font-size: 36px; }
+.workspace-note p { margin: 0; font-size: 14px; line-height: 1.6; }
+.workspace-note small { display: block; margin-top: 3px; color: #a3bfb2; font-size: 12px; }
+.input-hint { position: fixed; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 20px; width: max-content; max-width: calc(100% - 24px); padding: 9px 14px; border-radius: 24px; background: #0b1015b0; color: #94aaa6; font-size: 11px; pointer-events: none; }
+.controller-indicator { width: 6px; height: 6px; border-radius: 50%; background: #a8dfcc; }
+@keyframes reveal { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dismiss { to { opacity: 0; transform: translateY(12px); } }
+@media (max-width: 620px) { main { --card-width: 230px; } }
+@media (max-height: 650px) { main { padding: 0; --card-width: clamp(150px, 32dvh, 230px); }.cards { padding-block: 55px; }.plus { font-size: 64px; }.app-mark { font-size: 36px; top: 12px; }.card-caption { bottom: 12px; }.card-caption strong { font-size: 18px; }.agent-workspace { top: 110px; transform: none; }.app-content { overflow-y: auto; }.agent-workspace h1 { font-size: 48px; }.workspace-note { margin-top: 24px; margin-bottom: 90px; } }
+@media (prefers-reduced-motion: reduce) { .card, .shelf, .vertical-track { transition: none; }.app-content, .closing .app-content { animation: none; } }

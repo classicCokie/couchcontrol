@@ -1,0 +1,31 @@
+# Dependencies
+**/node_modules/
+
+# Build output
+**/dist/
+**/dist-ssr/
+**/.svelte-kit/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and local tooling
+*.log
+coverage/
+.DS_Store
+backend/codex/data/
+backend/codex/codex-web
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local production runtime and private data
+.runtime/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key
