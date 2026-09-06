@@ -10,8 +10,41 @@ export const availableApps = [
 export const addableApps = availableApps.filter(app => app.id !== 'settings')
 export const initialSwitcher = () => ({ apps: [{ id: 0, type: 'settings', title: 'Settings' }], selected: 0, view: 'menu', pickerSelected: 0, nextId: 1 })
 
+export const members = entry => entry?.type === 'group' ? entry.apps.filter(Boolean) : entry ? [entry] : []
+export const allApps = state => state.apps.flatMap(members)
+export const groupTitle = apps => apps.filter(Boolean).map(app => app.title).join(' + ')
+const replaceSelected = (state, entry) => ({ ...state, apps: state.apps.map((app, index) => index === state.selected - 1 ? entry : app) })
+function newInstance(state, definition) {
+  const number = Math.max(0, ...allApps(state).filter(app => app.type === definition.id).map(app => Number(app.title.slice(definition.title.length + 1)) || 0)) + 1
+  return { id: state.nextId, type: definition.id, title: `${definition.title} ${number}` }
+}
+
 export function navigate(state, action, catalog = addableApps) {
-  if (state.view === 'app') return action === 'back' ? { ...state, view: 'menu' } : state
+  if (state.view === 'app') {
+    const entry = state.apps[state.selected - 1]
+    if (!entry) return { ...state, view: 'menu', groupPicker: false }
+    if (action === 'close-empty') {
+      if (entry.type !== 'group' || entry.apps[entry.focused]) return state
+      return { ...replaceSelected(state, members(entry)[0]), groupPicker: false }
+    }
+    if (state.groupPicker) {
+      if (action === 'back') return { ...state, groupPicker: false }
+      if (action === 'up' || action === 'down') return { ...state, pickerSelected: Math.max(0, Math.min(catalog.length - 1, state.pickerSelected + (action === 'up' ? -1 : 1))) }
+      if (action === 'confirm' && catalog[state.pickerSelected]) {
+        const apps = entry.apps.map((app, side) => side === entry.focused ? newInstance(state, catalog[state.pickerSelected]) : app)
+        return { ...replaceSelected(state, { ...entry, apps, title: groupTitle(apps) }), nextId: state.nextId + 1, groupPicker: false }
+      }
+      return state
+    }
+    if (action === 'tile-left' || action === 'tile-right') {
+      const side = action === 'tile-left' ? 0 : 1
+      if (entry.type === 'group') return replaceSelected(state, { ...entry, focused: side })
+      const apps = side === 0 ? [entry, null] : [null, entry]
+      return { ...replaceSelected(state, { id: state.nextId, type: 'group', title: groupTitle(apps), apps, focused: 1 - side }), nextId: state.nextId + 1 }
+    }
+    if (action === 'confirm' && entry.type === 'group' && !entry.apps[entry.focused]) return { ...state, groupPicker: true, pickerSelected: 0 }
+    return action === 'back' ? { ...state, view: 'menu', groupPicker: false } : state
+  }
   if (action === 'back') return { ...state, view: 'menu' }
   if (state.view === 'picker') {
     if (action === 'up' || action === 'down') {
@@ -20,8 +53,7 @@ export function navigate(state, action, catalog = addableApps) {
     if (action === 'confirm') {
       const app = catalog[state.pickerSelected]
       if (!app) return state
-      const instanceNumber = Math.max(0, ...state.apps.filter(instance => instance.type === app.id).map(instance => Number(instance.title.slice(app.title.length + 1)) || 0)) + 1
-      const apps = [...state.apps, { id: state.nextId, type: app.id, title: `${app.title} ${instanceNumber}` }]
+      const apps = [...state.apps, newInstance(state, app)]
       return { ...state, apps, nextId: state.nextId + 1, selected: apps.length, view: 'menu' }
     }
     return state
@@ -42,4 +74,33 @@ export function removeApp(state, id) {
   const apps = state.apps.filter(app => app.id !== id)
   const selected = state.selected > index + 1 ? state.selected - 1 : Math.min(state.selected, apps.length)
   return { ...state, apps, selected, view: 'menu' }
+}
+
+export function removeGroupApp(state, groupId, appId) {
+  const index = state.apps.findIndex(app => app.id === groupId && app.type === 'group')
+  if (index < 0 || !members(state.apps[index]).some(app => app.id === appId)) return state
+  const remaining = members(state.apps[index]).find(app => app.id !== appId)
+  if (!remaining) return removeApp(state, groupId)
+  return { ...state, apps: state.apps.map((app, i) => i === index ? remaining : app), groupPicker: false }
+}
+
+
+const STORAGE_KEY = 'couchcontrol.app-groups.v1'
+export function restoreSwitcher(storage) {
+  try {
+    const saved = JSON.parse(storage.getItem(STORAGE_KEY))
+    if (saved?.version !== 1 || !Array.isArray(saved.apps)) return initialSwitcher()
+    const ids = new Set()
+    const validId = id => Number.isSafeInteger(id) && id >= 0 && !ids.has(id) && !!ids.add(id)
+    const validApp = app => app && validId(app.id) && availableApps.some(def => def.id === app.type) && typeof app.title === 'string' && app.title.length > 0
+    const valid = saved.apps.every(entry => entry?.type === 'group'
+      ? validId(entry.id) && Array.isArray(entry.apps) && entry.apps.length === 2 && entry.apps.some(Boolean) && entry.apps.every(app => app === null || validApp(app)) && [0, 1].includes(entry.focused)
+      : validApp(entry))
+    if (!valid || allApps(saved).filter(app => app.type === 'settings').length > 1) return initialSwitcher()
+    const apps = saved.apps.map(entry => entry.type === 'group' ? { ...entry, title: groupTitle(entry.apps) } : entry)
+    return { ...initialSwitcher(), apps, nextId: Math.max(-1, ...ids) + 1, selected: Number.isInteger(saved.selected) ? Math.max(0, Math.min(apps.length, saved.selected)) : 0 }
+  } catch { return initialSwitcher() }
+}
+export function saveSwitcher(state, storage) {
+  try { storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, apps: state.apps, selected: state.selected })) } catch { /* Storage may be unavailable; the current shelf still works. */ }
 }

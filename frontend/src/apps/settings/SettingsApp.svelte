@@ -151,6 +151,6 @@
   button:disabled { opacity: .45; cursor: default; }
   .feedback { color: #c2efd0; margin-bottom: 0; }
   .error { color: #ffcbc2; margin-bottom: 0; }
-  @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; overflow-y: auto; gap: 24px; } aside { border: 0; padding-right: 0; } .settings-panel { overflow: visible; } .navigation-hint { display: none; } }
+  @container (max-width: 760px) { .settings-workspace { inset-inline: 7%; } .settings-layout { grid-template-columns: 1fr; overflow-y: auto; gap: 24px; } aside { border: 0; padding-right: 0; } .settings-panel { overflow: visible; } .navigation-hint { display: none; } }
   @media (max-height: 650px) { .settings-workspace { inset-block: 90px 60px; } h1 { font-size: 36px; margin-bottom: 20px; } }
 </style>

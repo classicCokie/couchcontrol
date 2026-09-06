@@ -17,6 +17,7 @@
     record: startRecording, transcribe, copy: copyText, copied: text => oncopied(text),
     changed(next) {
       const wasOpen = opened
+      const previousText = state.text
       state = next
       opened = next.phase !== 'idle'
       if (!wasOpen && opened) {
@@ -24,6 +25,9 @@
         tick().then(() => { if (opened) dialog?.focus({ preventScroll: true }) })
       } else if (wasOpen && !opened) {
         tick().then(() => { if (!opened && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }) })
+      }
+      if (next.text && next.text !== previousText) {
+        tick().then(() => { if (opened && transcript) transcript.scrollTop = transcript.scrollHeight })
       }
     },
   })
@@ -80,9 +84,12 @@
         {:else if state.phase === 'transcribing'}<p>Turning your recording into text…</p>
         {:else if state.phase === 'ready'}<p>No speech was detected. Hold R2 to try again.</p>{/if}
       </div>
+      {#if state.text}
+        <p class="append-hint" role="status">{state.phase === 'recording' ? 'Keep holding R2. Release to add these words.' : state.phase === 'transcribing' ? 'Transcribing your next words…' : state.phase === 'preparing' ? 'Preparing the microphone. Your text is saved above.' : state.phase === 'copying' ? 'Copying your complete transcript…' : 'Hold R2 to add more · × / A to copy all text'}</p>
+      {/if}
       <footer>
         <button onclick={() => capture.cancel()}><span class="controller-key">○</span>{['preparing', 'recording'].includes(state.phase) ? 'Cancel recording' : 'Dismiss'}</button>
-        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? 'Copying…' : 'Copy text'}</button>
+        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? 'Copying…' : 'Copy all text'}</button>
       </footer>
     </div>
   </div>
@@ -101,6 +108,7 @@
   p { color: #aec8be; line-height: 1.6; margin: 0; }
   .words { font-size: clamp(19px, 2.1vw, 28px); color: #eef9f1; white-space: pre-wrap; overflow-wrap: anywhere; }
   .error { color: #ffcbc2; margin-bottom: 8px; }
+  .append-hint { flex-shrink: 0; font-size: 12px; color: #c5e4d5; }
   footer { display: flex; gap: 16px; justify-content: space-between; margin-top: 12px; }
   button { display: flex; align-items: center; gap: 12px; background: #ffffff08; border: 1px solid #ffffff25; border-radius: 12px; padding: 12px 18px; font-size: 14px; }
   button:hover { background: #ffffff16; }

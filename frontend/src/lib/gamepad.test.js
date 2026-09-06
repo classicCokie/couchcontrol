@@ -178,3 +178,57 @@ test('Square emits paste once per press, with Circle taking priority', () => {
   pad.buttons[2].pressed = true; pad.buttons[1].pressed = true
   assert.deepEqual(read(pad, 1004), ['back'])
 })
+
+test('L1/R1 emit distinct tiling actions once per press and Back takes priority', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.buttons[4].pressed = true
+  assert.deepEqual(read(pad, 0), ['tile-left'])
+  assert.deepEqual(read(pad, 1000), [])
+  pad.buttons[4].pressed = false; read(pad, 1001)
+  pad.buttons[5].pressed = true
+  assert.deepEqual(read(pad, 1002), ['tile-right'])
+  assert.deepEqual(read(pad, 2000), [])
+  pad.buttons[5].pressed = false; read(pad, 2001)
+  pad.buttons[4].pressed = true; pad.buttons[1].pressed = true
+  assert.deepEqual(read(pad, 2002), ['back'])
+})
+
+test('Triangle / Y closes an empty pane once per press, with Back taking priority', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.buttons[3].pressed = true
+  assert.deepEqual(read(pad, 0), ['close-empty'])
+  assert.deepEqual(read(pad, 1000), [])
+  pad.buttons[3].pressed = false; read(pad, 1001)
+  pad.buttons[3].pressed = true
+  assert.deepEqual(read(pad, 1002), ['close-empty'])
+  pad.buttons[3].pressed = false; read(pad, 1003)
+  pad.buttons[3].pressed = true; pad.buttons[1].pressed = true
+  assert.deepEqual(read(pad, 1004), ['back'])
+})
+
+test('right-stick vertical actions use a dead zone, repeat delay, and immediate reversal', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.axes = [0, 0, 0.1, 0.2]
+  assert.deepEqual(read(pad, 0), [])
+  pad.axes[3] = 0.8
+  assert.deepEqual(read(pad, 1), ['right-stick-down'])
+  assert.deepEqual(read(pad, 400), [])
+  assert.deepEqual(read(pad, 401), ['right-stick-down'])
+  pad.axes[3] = -0.8
+  assert.deepEqual(read(pad, 402), ['right-stick-up'])
+  pad.axes[3] = -0.4
+  assert.deepEqual(read(pad, 403), [])
+  pad.axes[3] = 0.1
+  assert.deepEqual(read(pad, 404), [])
+  pad.axes[3] = 0.8
+  assert.deepEqual(read(pad, 405), ['right-stick-down'])
+})
+
+test('right-stick horizontal movement is ignored and Circle wins simultaneous stick input', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.axes = [0, 0, 0.9, 0.7]
+  assert.deepEqual(read(pad, 0), [])
+  pad.axes[2] = 0
+  pad.buttons[1].pressed = true
+  assert.deepEqual(read(pad, 1), ['back'])
+})

@@ -150,3 +150,114 @@ test('failed or canceled copies never trigger automatic pasting', async () => {
   clipboard.resolve()
   await copying
 })
+
+test('successive R2 takes append in order without dismissing or hiding the existing transcript', async () => {
+  const changes = [], results = [' First sentence. ', ' Second sentence. ', 'Third sentence.']
+  let index = 0
+  const { capture, calls } = harness({ changed: state => changes.push(state), transcribe: async () => ({ text: results[index++] }) })
+  await capture.press(); await capture.release()
+  changes.length = 0
+  await capture.press()
+  assert.equal(capture.state.text, 'First sentence.')
+  const release = capture.release()
+  assert.equal(capture.state.text, 'First sentence.')
+  await release
+  assert.equal(capture.state.text, 'First sentence. Second sentence.')
+  assert.equal(changes.some(state => state.phase === 'idle' || !state.text), false)
+  await capture.press(); await capture.release(); await capture.confirm()
+  assert.deepEqual(calls.copies, ['First sentence. Second sentence. Third sentence.'])
+})
+
+test('an empty additional transcript preserves earlier words without adding whitespace', async () => {
+  let take = 0
+  const { capture } = harness({ transcribe: async () => ({ text: take++ ? ' \n ' : 'Keep this.' }) })
+  await capture.press(); await capture.release()
+  await capture.press(); await capture.release()
+  assert.equal(capture.state.text, 'Keep this.')
+  assert.equal(capture.state.phase, 'ready')
+  assert.match(capture.state.error, /No additional speech/)
+})
+
+test('a failed additional upload keeps the draft copyable and the next take can append', async () => {
+  let take = 0
+  const { capture, calls } = harness({ transcribe: async () => {
+    if (++take === 2) throw new Error('Network unavailable')
+    return { text: take === 1 ? 'Keep this.' : 'And this.' }
+  } })
+  await capture.press(); await capture.release()
+  await capture.press(); await capture.release()
+  assert.equal(capture.state.text, 'Keep this.')
+  assert.equal(capture.state.phase, 'ready')
+  assert.equal(capture.state.error, 'Network unavailable')
+  await capture.press(); await capture.release(); await capture.confirm()
+  assert.deepEqual(calls.copies, ['Keep this. And this.'])
+})
+
+test('additional microphone errors preserve the completed transcript', async () => {
+  let onError
+  const { capture, recorder } = harness({ record: async callback => { onError = callback; return recorder } })
+  await capture.press(); await capture.release()
+  await capture.press()
+  onError(new Error('Microphone disconnected'))
+  assert.equal(capture.state.text, 'Hello world.')
+  assert.equal(capture.state.phase, 'ready')
+  assert.equal(capture.state.stream, null)
+  await capture.release()
+  assert.equal(capture.state.text, 'Hello world.')
+})
+
+test('releasing R2 during additional microphone permission keeps the draft and stops late tracks', async () => {
+  const mic = deferred(), started = deferred()
+  let take = 0
+  const { capture, recorder, calls } = harness({ record: () => {
+    if (take++ === 0) return Promise.resolve(recorder)
+    started.resolve(); return mic.promise
+  } })
+  await capture.press(); await capture.release()
+  const opening = capture.press()
+  await started.promise
+  await capture.release()
+  assert.equal(capture.state.phase, 'ready')
+  assert.equal(capture.state.text, 'Hello world.')
+  mic.resolve(recorder); await opening
+  assert.equal(calls.cancels, 1)
+  assert.equal(calls.uploads.length, 1)
+})
+
+test('R2 cannot start another take during upload or copying', async () => {
+  const transcription = deferred(), uploading = deferred(), clipboard = deferred()
+  let recordings = 0
+  const { capture, recorder } = harness({
+    record: async () => { recordings++; return recorder },
+    transcribe: () => { uploading.resolve(); return transcription.promise },
+    copy: () => clipboard.promise,
+  })
+  await capture.press()
+  const release = capture.release()
+  await uploading.promise
+  await capture.press(); await capture.release()
+  assert.equal(capture.state.phase, 'transcribing')
+  transcription.resolve({ text: 'One take.' }); await release
+  const copying = capture.confirm()
+  await capture.press(); await capture.release()
+  assert.equal(capture.state.phase, 'copying')
+  assert.equal(recordings, 1)
+  clipboard.resolve(); await copying
+})
+
+test('dismissal clears every take and an old additional upload cannot append into a new draft', async () => {
+  const old = deferred(), uploading = deferred()
+  let take = 0
+  const { capture } = harness({ transcribe: () => {
+    if (++take === 2) { uploading.resolve(); return old.promise }
+    return Promise.resolve({ text: take === 1 ? 'Old draft.' : 'New draft.' })
+  } })
+  await capture.press(); await capture.release()
+  await capture.press()
+  const release = capture.release()
+  await uploading.promise
+  capture.cancel()
+  await capture.press(); await capture.release()
+  old.resolve({ text: 'Must not appear.' }); await release
+  assert.equal(capture.state.text, 'New draft.')
+})

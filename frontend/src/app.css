@@ -28,10 +28,10 @@ main { --card-width: clamp(245px, 24vw, 360px); --card-height: calc(var(--card-w
 .app-open .card { opacity: 0; pointer-events: none; }
 .app-open .card.chosen { visibility: hidden; opacity: 1; }
 .app-open.returning .card:not(.chosen) { opacity: 1; }
-.app-surface { position: fixed; inset: 0; z-index: 10; overflow: hidden; isolation: isolate; }
+.app-surface { position: fixed; inset: 0; z-index: 10; overflow: hidden; isolation: isolate; transform-origin: 0 0; }
 .surface-mark { position: absolute; top: 10%; right: 5%; font-size: clamp(160px, 35vw, 540px); color: var(--app-ink); opacity: .05; line-height: 1; }
-.app-content { position: absolute; inset: 0; animation: reveal .18s both; }
-.closing .app-content { animation: dismiss .08s both; pointer-events: none; }
+.app-content { position: absolute; inset: 0; }
+.closing .app-content { pointer-events: none; }
 .back-button { position: absolute; top: clamp(24px, 5vh, 56px); left: clamp(24px, 6vw, 96px); display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #0b101540; border: 1px solid #ffffff30; border-radius: 100px; }
 .back-button:hover { background: #ffffff15; }
 kbd { font: inherit; font-size: 10px; padding: 2px 5px; border: 1px solid #ffffff25; border-radius: 4px; }
@@ -46,8 +46,41 @@ h1 { font-size: clamp(48px, 8vw, 110px); font-weight: 500; letter-spacing: -.065
 .workspace-note small { display: block; margin-top: 3px; color: #a3bfb2; font-size: 12px; }
 .input-hint { position: fixed; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 20px; width: max-content; max-width: calc(100% - 24px); padding: 9px 14px; border-radius: 24px; background: #0b1015b0; color: #94aaa6; font-size: 11px; pointer-events: none; }
 .controller-indicator { width: 6px; height: 6px; border-radius: 50%; background: #a8dfcc; }
-@keyframes reveal { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes dismiss { to { opacity: 0; transform: translateY(12px); } }
 @media (max-width: 620px) { main { --card-width: 230px; } }
 @media (max-height: 650px) { main { padding: 0; --card-width: clamp(150px, 32dvh, 230px); }.cards { padding-block: 55px; }.plus { font-size: 64px; }.app-mark { font-size: 36px; top: 12px; }.card-caption { bottom: 12px; }.card-caption strong { font-size: 18px; }.agent-workspace { top: 110px; transform: none; }.app-content { overflow-y: auto; }.agent-workspace h1 { font-size: 48px; }.workspace-note { margin-top: 24px; margin-bottom: 90px; } }
 @media (prefers-reduced-motion: reduce) { .card, .shelf, .vertical-track { transition: none; }.app-content, .closing .app-content { animation: none; } }
+
+/* App groups keep their members in the same left/right order on the shelf. */
+.group-card { overflow: hidden; }
+.group-halves { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.group-half { min-width: 0; padding: 22px 16px 44px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; background: radial-gradient(ellipse at 80% 0%, var(--app-glow), transparent 85%), var(--app-base); }
+.group-half + .group-half { border-left: 1px solid #ffffff35; }
+.group-icon { font-size: 40px; color: var(--app-ink); line-height: 1; }
+.group-half strong { font-size: clamp(13px, 1.4vw, 19px); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-label { position: absolute; bottom: 0; inset-inline: 0; padding: 9px 16px; background: #08151080; color: #d2e5dc; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.app-pane { position: relative; z-index: 1; transform-origin: 0 0; min-width: 0; min-height: 0; height: 100%; background: radial-gradient(ellipse at 80% 0%, var(--app-glow), transparent 65%), var(--app-base); }
+.pane-body { position: absolute; inset: 0; }
+.split-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px 8px 62px; background: #080f14; }
+.split-layout > section { grid-row: 1; border: 2px solid #ffffff18; border-radius: 16px; overflow: hidden; min-width: 0; }
+.split-layout > .focused { border-color: #bee9ca; box-shadow: 0 0 0 1px #bee9ca25; }
+.split-layout .pane-body { top: 46px; }
+.pane-heading { position: absolute; inset: 0 0 auto; height: 46px; display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-bottom: 1px solid #ffffff15; background: #08151080; text-align: left; padding: 10px 14px; font-size: 12px; }
+.pane-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane-heading small { margin-left: auto; font-size: 10px; color: #b5ccc0; white-space: nowrap; }
+.pane-heading:focus-visible { outline-offset: -4px; }
+.empty-pane { position: relative; background: radial-gradient(ellipse at 50% 40%, #233d3c, transparent 70%), #101d23; }
+.empty-add { position: absolute; inset: 46px 0 74px; width: 100%; border: 0; background: none; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; padding: 16px; }
+.empty-close { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; max-width: calc(100% - 24px); padding: 10px 14px; border: 1px solid #ffffff25; border-radius: 20px; background: #0b101540; color: #b5ccc0; font-size: 11px; }
+.empty-close:hover { background: #ffffff12; }
+.empty-add:focus-visible { outline: none; background: #bceaca06; }
+.empty-plus { width: 96px; height: 96px; display: grid; place-items: center; border: 1px dashed #c4e5d75c; border-radius: 22px; font-size: 64px; color: #c7e7d8; }
+.empty-add strong { font-size: clamp(20px, 3vw, 34px); font-weight: 500; }
+.empty-add > span:not(.empty-plus), .empty-add small { color: #a3bfb2; font-size: 12px; }
+.empty-add small { border: 1px solid #ffffff20; padding: 8px 12px; border-radius: 20px; }
+.tiling-controls { position: absolute; top: 12px; right: 14px; z-index: 2; display: flex; gap: 8px; }
+.tiling-controls button { display: flex; gap: 8px; align-items: center; background: #0b1015db; border: 1px solid #ffffff30; border-radius: 20px; padding: 8px 12px; font-size: 11px; }
+.group-picker { position: absolute; --card-width: min(280px, 36vw); --card-height: calc(var(--card-width) / 1.52); }
+.group-picker .back-button { top: 16px; left: 16px; font-size: 12px; }
+.group-picker .vertical-track { --vertical-gap: 30px; }
+.group-picker .picker-card { opacity: 1; visibility: visible; pointer-events: auto; }
+@media (max-width: 620px) { .split-layout { gap: 4px; padding-inline: 4px; } .pane-heading { padding-inline: 8px; } .pane-heading small { display: none; } .empty-plus { width: 64px; height: 64px; font-size: 44px; } .group-picker .app-mark { font-size: 28px; top: 10px; left: 12px; } .group-picker .card-caption { left: 12px; bottom: 10px; } .group-picker .card-caption strong { font-size: 16px; } .group-picker .card-caption small { display: none; } }

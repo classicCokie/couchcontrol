@@ -1,11 +1,14 @@
 // Standard browser mapping: south/east face buttons, D-pad, left stick.
 export function createGamepadReader() {
   let direction = ''
+  let rightDirection = '', rightRepeat = 0
   let nextRepeat = 0
   let wasConfirm = false
   let wasBack = false
   let wasTrigger = false
   let wasPaste = false
+  let wasTriangle = false
+  let wasL1 = false, wasR1 = false
 
   return (pad, now) => {
     const pressed = index => pad.buttons[index]?.pressed ?? false
@@ -21,16 +24,25 @@ export function createGamepadReader() {
         ? (x > 0 ? 'right' : 'left') : (y > 0 ? 'down' : 'up')
     }
 
+    const rightY = pad.axes[3] ?? 0
+    const nextRightDirection = Math.abs(rightY) > (rightDirection ? 0.3 : 0.6) && Math.abs(rightY) >= Math.abs(pad.axes[2] ?? 0)
+      ? (rightY > 0 ? 'right-stick-down' : 'right-stick-up') : ''
     const confirm = pressed(0)
     const back = pressed(1)
     const paste = pressed(2)
+    const triangle = pressed(3)
+    const l1 = pressed(4), r1 = pressed(5)
     const value = pad.buttons[7]?.value ?? 0
     const trigger = pressed(7) || value > (wasTrigger ? 0.2 : 0.55)
     const actions = []
     if (trigger && !wasTrigger) actions.push('record-start')
     if (back && !wasBack) actions.push('back')
+    else if (triangle && !wasTriangle) actions.push('close-empty')
+    else if (l1 && !wasL1) actions.push('tile-left')
+    else if (r1 && !wasR1) actions.push('tile-right')
     else if (confirm && !wasConfirm) actions.push('confirm')
     else if (paste && !wasPaste) actions.push('paste')
+    else if (nextRightDirection && (nextRightDirection !== rightDirection || now >= rightRepeat)) actions.push(nextRightDirection)
     else if (nextDirection && (nextDirection !== direction || now >= nextRepeat)) {
       actions.push(nextDirection)
     }
@@ -39,10 +51,16 @@ export function createGamepadReader() {
     wasTrigger = trigger
     if (nextDirection !== direction) nextRepeat = now + 400
     else if (actions.includes(nextDirection)) nextRepeat = now + 180
+    if (nextRightDirection !== rightDirection) rightRepeat = now + 400
+    else if (actions.includes(nextRightDirection)) rightRepeat = now + 180
+    rightDirection = nextRightDirection
     direction = nextDirection
     wasConfirm = confirm
     wasBack = back
     wasPaste = paste
+    wasTriangle = triangle
+    wasL1 = l1
+    wasR1 = r1
     return actions
   }
 }

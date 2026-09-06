@@ -37,11 +37,12 @@
   <div bind:this={dialog} class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-app-title" aria-describedby="close-app-description" aria-busy={busy} tabindex="-1"
     transition:fly={{ y: 24, duration: reducedMotion ? 0 : 220, easing: cubicOut }}>
     <h2 id="close-app-title">Close {app.title}?</h2>
-    <p id="close-app-description">{app.type === 'codex' ? 'This will stop its running process and remove its saved terminal session.' : 'Are you sure you want to close this app?'}</p>
+    <p id="close-app-description">{app.type === 'group' ? 'This will close both apps in this group, stop any running Codex processes, and remove their saved terminal sessions.' : app.type === 'codex' ? 'This will stop its running process and remove its saved terminal session.' : 'Are you sure you want to close this app?'}</p>
+    {#if app.groupId !== undefined}<p class="scope-note">Only this app will close. Any app on the other side stays open.</p>{/if}
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <footer>
       <button disabled={busy} onclick={oncancel}><span aria-hidden="true">○</span> Cancel <kbd>Esc</kbd></button>
-      <button class="confirm" disabled={busy} onclick={onconfirm}><span aria-hidden="true">×</span> {busy ? 'Closing…' : 'Close app'} <kbd>Enter</kbd></button>
+      <button class="confirm" disabled={busy} onclick={onconfirm}><span aria-hidden="true">×</span> {busy ? 'Closing…' : app.type === 'group' ? 'Close group' : 'Close app'} <kbd>Enter</kbd></button>
     </footer>
   </div>
 </div>
@@ -52,6 +53,7 @@
   h2 { margin: 0 0 16px; color: #e0ece7; font-size: 28px; font-weight: 500; }
   p { margin: 0; color: #aec8be; line-height: 1.6; }
   .error { color: #ffcbc2; margin-top: 16px; }
+  .scope-note { margin-top: 12px; }
   footer { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
   button { display: flex; align-items: center; justify-content: center; gap: 10px; flex: 1; white-space: nowrap; padding: 12px; border: 1px solid #ffffff25; border-radius: 10px; background: #ffffff08; font-size: 14px; }
   button span { font-size: 23px; line-height: 1; }

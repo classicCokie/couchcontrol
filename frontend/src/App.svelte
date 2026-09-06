@@ -1,18 +1,26 @@
 <script>
   import { onMount, setContext, tick } from 'svelte'
   import { fly } from 'svelte/transition'
+  import { createLayoutMotion, rectTransform } from './lib/layout-motion.js'
   import { cubicOut } from 'svelte/easing'
   import { startGamepadControls } from './lib/gamepad.js'
-  import { availableApps, addableApps, initialSwitcher, navigate, removeApp } from './lib/switcher.js'
+  import { availableApps, addableApps, initialSwitcher, navigate, members, allApps, restoreSwitcher, saveSwitcher } from './lib/switcher.js'
   import AppIcon from './lib/AppIcon.svelte'
-  import CodexApp from './apps/codex/CodexApp.svelte'
-  import SettingsApp from './apps/settings/SettingsApp.svelte'
+  import AppPane from './features/apps/AppPane.svelte'
   import CloseAppDialog from './features/apps/CloseAppDialog.svelte'
+  import { closeAppRequest } from './lib/close-app.js'
   import { openAppSession } from './apps/codex/session.js'
   import VoiceOverlay from './features/voice/VoiceOverlay.svelte'
   import FolderPicker from './features/folders/FolderPicker.svelte'
   import { FOLDER_PICKER } from './features/folders/context.js'
-  let voiceOverlay, settingsApp, codexApp
+  import { createFolderQueue } from './features/folders/queue.js'
+  let voiceOverlay
+  let panes = {}
+  let paneElements = {}
+  const layoutMotion = createLayoutMotion()
+  let emptyButton
+  let storageReady = false
+  let shelfStorage
   let voiceOpen = false
   let closeRequest = null, closeDialog, closeBusy = false, closeError = ''
   function cancelClose() {
@@ -27,9 +35,13 @@
     closeBusy = true
     closeError = ''
     try {
-      if (app.type === 'codex') await openAppSession.close(app.title)
-      state = removeApp(state, app.id)
+      const next = await closeAppRequest(state, app, openAppSession.close)
+      const survivor = app.groupId !== undefined ? visibleApps.find(member => member.id !== app.id) : null
+      const play = survivor ? layoutMotion.capture(paneElements[survivor.id], reducedMotion) : null
+      state = next
       closeRequest = null
+      await tick()
+      play?.()
       await focusSelection()
       centerSelected()
     } catch (error) {
@@ -39,18 +51,12 @@
     }
   }
   let folderRequest = null, folderPicker, voiceTarget
-  setContext(FOLDER_PICKER, (options = {}) => new Promise(resolve => {
-    finishFolder(null)
-    if (options.signal?.aborted) { resolve(null); return }
-    const abort = () => { if (folderRequest?.resolve === resolve) finishFolder(null) }
-    options.signal?.addEventListener('abort', abort, { once: true })
-    folderRequest = { ...options, resolve, cleanup: () => options.signal?.removeEventListener('abort', abort) }
-  }))
+  const folderQueue = createFolderQueue(request => { folderRequest = request })
+  setContext(FOLDER_PICKER, folderQueue.choose)
   function finishFolder(path) {
-    const request = folderRequest
-    folderRequest = null
-    request?.cleanup()
-    request?.resolve(path)
+    if (path) folderQueue.finish(path)
+    else folderQueue.cancelAll()
+    if (!folderRequest) focusSelection()
   }
   async function voiceCopied(text) {
     const target = voiceTarget
@@ -64,8 +70,6 @@
   let state = initialSwitcher()
   let cardsViewport
   let appSurface
-  let appContent
-  let backButton
   let pickerStage
   let pickerBackButton
   let lastWheel = -Infinity
@@ -75,16 +79,22 @@
   let motionId = 0
   let controllerConnected = false
   let reducedMotion = false
-  $: appCatalog = state.apps.some(app => app.type === 'settings') ? addableApps : availableApps
+  $: appCatalog = allApps(state).some(app => app.type === 'settings') ? addableApps : availableApps
+  $: if (storageReady) saveSwitcher(state, shelfStorage)
   $: appOpen = state.view === 'app'
-  $: pickerOpen = state.view === 'picker'
-  $: activeApp = state.apps[state.selected - 1]
+  $: pickerOpen = state.view === 'picker' || !!state.groupPicker
+  $: activeEntry = state.apps[state.selected - 1]
+  $: grouped = activeEntry?.type === 'group'
+  $: visibleApps = members(activeEntry)
+  $: activeApp = grouped ? activeEntry.apps[activeEntry.focused] : activeEntry
+  $: activePane = panes[activeApp?.id]
+  $: codexApp = activePane
+  $: settingsApp = activePane
   $: activeDefinition = availableApps.find(app => app.id === activeApp?.type)
-  $: codexOpen = appOpen && activeDefinition?.id === 'codex'
-  $: settingsOpen = appOpen && activeDefinition?.id === 'settings'
+  $: codexOpen = appOpen && !pickerOpen && activeDefinition?.id === 'codex'
+  $: settingsOpen = appOpen && !pickerOpen && activeDefinition?.id === 'settings'
 
   const selectedCard = () => cardsViewport?.querySelectorAll('.card')[state.selected]
-  const frame = (bounds, radius) => ({ left: bounds.left + 'px', top: bounds.top + 'px', width: bounds.width + 'px', height: bounds.height + 'px', borderRadius: radius })
 
   function centerSelected(behavior = 'smooth') {
     const card = selectedCard()
@@ -99,16 +109,17 @@
 
   async function focusSelection() {
     await tick()
-    if (settingsOpen) settingsApp?.focusNavigation()
-    else if (state.view === 'app') backButton?.focus({ preventScroll: true })
-    else if (state.view === 'picker') pickerStage?.querySelectorAll('.picker-card')[state.pickerSelected]?.focus({ preventScroll: true })
+    if (pickerOpen) pickerStage?.querySelectorAll('.picker-card')[state.pickerSelected]?.focus({ preventScroll: true })
+    else if (appOpen && activeApp) activePane?.focusNavigation()
+    else if (appOpen) emptyButton?.focus({ preventScroll: true })
     else selectedCard()?.focus({ preventScroll: true })
   }
 
   async function animateSurface(from, to, returnState) {
     const id = ++motionId
     surfaceAnimation?.cancel()
-    surfaceAnimation = appSurface.animate([from, to], {
+    const viewport = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+    surfaceAnimation = appSurface.animate([{ transform: rectTransform(from, viewport) }, { transform: rectTransform(to, viewport) }], {
       duration: reducedMotion ? 0 : returnState ? 180 : 240,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both',
     })
@@ -132,37 +143,56 @@
     if (folderRequest) { folderPicker?.handleAction(action); return }
     if (closeRequest) { closeDialog?.handleAction(action); return }
     if (closing) return
+    if (codexOpen && codexApp?.control(action)) return
+    if (appOpen && grouped && activeApp && action === 'close-empty') {
+      closeError = ''
+      closeRequest = { ...activeApp, groupId: activeEntry.id }
+      return
+    }
+    if (appOpen && (action === 'close-empty' || (!pickerOpen && (action === 'tile-left' || action === 'tile-right')))) {
+      const next = navigate(state, action, appCatalog)
+      if (next === state) return
+      const layoutChanged = grouped !== (next.apps[next.selected - 1]?.type === 'group')
+      if (layoutChanged) surfaceAnimation?.finish()
+      const play = layoutChanged ? layoutMotion.capture(paneElements[visibleApps[0]?.id], reducedMotion) : null
+      state = next
+      await tick()
+      play?.()
+      await focusSelection()
+      return
+    }
     if (codexOpen && action === 'confirm') {
       codexApp?.pressEnter()
       return
     }
     if (action === 'paste') {
       if (codexOpen) codexApp?.pasteClipboard()
-      else if (state.view === 'menu' && activeApp) { closeError = ''; closeRequest = activeApp }
+      else if (state.view === 'menu' && activeEntry) { closeError = ''; closeRequest = activeEntry }
       return
     }
     if (settingsOpen && settingsApp?.control(action)) return
-    if (state.view === 'app' && (action === 'up' || action === 'down')) {
-      appContent?.scrollBy({ top: action === 'up' ? -100 : 100, behavior: 'instant' })
+    if (appOpen && !pickerOpen && (action === 'up' || action === 'down')) {
+      activePane?.scroll(action)
       return
     }
     const next = navigate(state, action, appCatalog)
     if (next === state) return
     if (state.view === 'app' && next.view === 'menu') {
-      const from = frame(appSurface.getBoundingClientRect(), getComputedStyle(appSurface).borderRadius)
+      layoutMotion.cancel()
+      const from = appSurface.getBoundingClientRect()
       closing = true
       centerSelected('instant')
       const card = selectedCard()
-      animateSurface(from, frame(card.getBoundingClientRect(), getComputedStyle(card).borderRadius), next)
+      animateSurface(from, card.getBoundingClientRect(), next)
       return
     }
-    if (next.view === 'app') {
+    if (next.view === 'app' && state.view !== 'app') {
       const card = selectedCard()
-      const origin = frame(card.getBoundingClientRect(), getComputedStyle(card).borderRadius)
+      const origin = card.getBoundingClientRect()
       cardsViewport.scrollTo({ left: cardsViewport.scrollLeft, behavior: 'instant' })
       state = next
       await focusSelection()
-      animateSurface(origin, frame({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }, '0px'))
+      animateSurface(origin, { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight })
       return
     }
     state = next
@@ -182,9 +212,20 @@
     if (voiceOpen) return
     if (folderRequest) { folderPicker?.handleKeydown(event); return }
     if (closeRequest) { closeDialog?.handleKeydown(event); return }
+    if (codexOpen && codexApp?.handleKeydown(event)) return
+    if (appOpen && grouped && event.key === 'Delete' && (!activeApp || event.altKey)) {
+      event.preventDefault()
+      if (!event.repeat) act('close-empty')
+      return
+    }
     if (state.view === 'menu' && event.key === 'Delete') {
       event.preventDefault()
       if (!event.repeat) act('paste')
+      return
+    }
+    if (appOpen && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault()
+      if (!event.repeat) act(event.key === 'ArrowLeft' ? 'tile-left' : 'tile-right')
       return
     }
     if (settingsOpen) {
@@ -192,7 +233,7 @@
       else settingsApp?.handleKeydown(event)
       return
     }
-    if (appOpen && activeDefinition?.id === 'codex') {
+    if (codexOpen) {
       if (event.ctrlKey && event.shiftKey && event.key === 'Backspace') {
         event.preventDefault()
         act('back')
@@ -200,7 +241,7 @@
       return
     }
     if (event.key === 'Tab') {
-      if (appOpen) { event.preventDefault(); backButton?.focus() }
+      if (appOpen && !pickerOpen && !activeApp) { event.preventDefault(); emptyButton?.focus() }
       if (pickerOpen) {
         event.preventDefault()
         if (document.activeElement === pickerBackButton) focusSelection()
@@ -212,7 +253,10 @@
     if (!action) return
     event.preventDefault()
     if (event.repeat && (action === 'confirm' || action === 'back')) return
-    if ((appOpen || (pickerOpen && document.activeElement === pickerBackButton)) && action === 'confirm') act('back')
+    if (appOpen && !pickerOpen && action === 'confirm' && event.target?.tagName === 'BUTTON') {
+      event.target.click()
+    }
+    else if (pickerOpen && document.activeElement === pickerBackButton && action === 'confirm') act('back')
     else act(action)
   }
 
@@ -231,8 +275,11 @@
   }
 
   onMount(() => {
+    try { shelfStorage = window.localStorage; state = restoreSwitcher(shelfStorage) } catch { state = initialSwitcher() }
+    storageReady = true
+    focusSelection()
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const updateMotion = () => { reducedMotion = motion.matches }
+    const updateMotion = () => { reducedMotion = motion.matches; if (reducedMotion) { layoutMotion.cancel(); surfaceAnimation?.finish() } }
     updateMotion()
     motion.addEventListener('change', updateMotion)
     centerSelected('instant')
@@ -247,15 +294,16 @@
       stopGamepad()
       observer.disconnect()
       motion.removeEventListener('change', updateMotion)
+      layoutMotion.cancel()
       ++motionId
       surfaceAnimation?.cancel()
     }
   })
 </script>
 
-<svelte:window onkeydown={handleKeydown} onresize={() => surfaceAnimation?.finish()} />
+<svelte:window onkeydown={handleKeydown} onresize={() => { layoutMotion.cancel(); surfaceAnimation?.finish() }} />
 
-<main class:picker-open={pickerOpen} inert={voiceOpen || !!folderRequest || !!closeRequest}>
+<main class:picker-open={pickerOpen && !appOpen} inert={voiceOpen || !!folderRequest || !!closeRequest}>
   <section class="shelf" class:app-open={appOpen} class:returning={closing} inert={appOpen || pickerOpen} aria-label="App switcher">
     <div bind:this={cardsViewport} class="cards" role="toolbar" aria-label="Your apps" onscrollend={() => { if (!appOpen) centerSelected() }}>
       <button class="card add-card" class:chosen={state.selected === 0} tabindex={state.selected === 0 ? 0 : -1}
@@ -264,19 +312,32 @@
         <span class="plus" aria-hidden="true">+</span>
       </button>
       {#each state.apps as app, index (app.id)}
-        {@const definition = availableApps.find(entry => entry.id === app.type)}
-        <button class="card app-card" style:--app-glow={definition.glow} style:--app-base={definition.base} style:--app-ink={definition.ink} class:chosen={state.selected === index + 1} tabindex={state.selected === index + 1 ? 0 : -1} aria-label={'Switch to ' + app.title} onclick={() => clickTile(index + 1)}>
-          <span class="app-mark" aria-hidden="true"><AppIcon type={definition.id} /></span>
-          <span class="card-caption"><strong>{app.title}</strong><small>Your workspace</small></span>
+        {@const definition = availableApps.find(entry => entry.id === members(app)[0].type)}
+        <button class="card app-card" class:group-card={app.type === 'group'} style:--app-glow={definition.glow} style:--app-base={definition.base} style:--app-ink={definition.ink} class:chosen={state.selected === index + 1} tabindex={state.selected === index + 1 ? 0 : -1} aria-label={'Switch to ' + app.title} onclick={() => clickTile(index + 1)}>
+          {#if app.type === 'group'}
+            <span class="group-halves">
+              {#each app.apps as member}
+                {@const theme = availableApps.find(def => def.id === member?.type)}
+                <span class="group-half" style:--app-glow={theme?.glow || '#293b43'} style:--app-base={theme?.base || '#17232c'} style:--app-ink={theme?.ink || '#cde3da'}>
+                  <span class="group-icon" aria-hidden="true">{#if member}<AppIcon type={member.type} />{:else}+{/if}</span>
+                  <strong>{member?.title || 'Add an app'}</strong>
+                </span>
+              {/each}
+            </span>
+            <span class="group-label">App group</span>
+          {:else}
+            <span class="app-mark" aria-hidden="true"><AppIcon type={definition.id} /></span>
+            <span class="card-caption"><strong>{app.title}</strong><small>Your workspace</small></span>
+          {/if}
         </button>
       {/each}
     </div>
   </section>
 
-  {#if pickerOpen}
-    <div bind:this={pickerStage} id="app-picker" class="picker-stage" role="dialog" aria-modal="true" aria-label="Choose an app to add" tabindex="-1"
+  {#snippet picker()}
+    <div bind:this={pickerStage} id="app-picker" class="picker-stage" class:group-picker={appOpen} role="dialog" aria-modal="true" aria-label="Choose an app to add" tabindex="-1"
       transition:fly={{ y: 80, duration: reducedMotion ? 0 : 600, easing: cubicOut }}>
-      <button bind:this={pickerBackButton} class="back-button picker-back" onclick={() => act('back')}><span aria-hidden="true">←</span> Your apps <kbd>esc</kbd></button>
+      <button bind:this={pickerBackButton} class="back-button picker-back" onclick={() => act('back')}><span aria-hidden="true">←</span> {appOpen ? 'App group' : 'Your apps'} <kbd>esc</kbd></button>
       <div class="vertical-viewport" role="toolbar" tabindex="-1" aria-label="Available apps" aria-orientation="vertical" onwheel={handleWheel}
         ontouchstart={event => { touchStartY = event.touches[0].clientY }} ontouchend={handleTouchEnd} ontouchcancel={() => { touchStartY = null }}>
         <div class="vertical-track" style:--selected={state.pickerSelected}>
@@ -290,44 +351,57 @@
         </div>
       </div>
     </div>
-  {/if}
+  {/snippet}
+
+  {#if pickerOpen && !appOpen}{@render picker()}{/if}
 
   {#if appOpen}
-    <div bind:this={appSurface} class="app-surface" style:--app-glow={activeDefinition.glow} style:--app-base={activeDefinition.base} style:--app-ink={activeDefinition.ink} class:closing role="dialog" aria-modal="true" aria-label={codexOpen ? 'Codex terminal' : undefined} aria-labelledby={codexOpen ? undefined : 'app-title'} tabindex="-1">
-      {#if !codexOpen}<span class="surface-mark" aria-hidden="true"><AppIcon type={activeDefinition.id} /></span>{/if}
-      <div bind:this={appContent} class="app-content">
-        {#if activeDefinition.id === 'codex'}
-          <CodexApp bind:this={codexApp} title={activeApp.title} canPaste={() => codexOpen && !voiceOpen && !folderRequest && !closing} oncancel={() => act('back')} />
-        {:else}
-        <button bind:this={backButton} class="back-button" onclick={() => act('back')}><span aria-hidden="true">←</span> Your apps <kbd>esc</kbd></button>
-        {#if settingsOpen}
-          <SettingsApp bind:this={settingsApp} />
-        {:else}
-        <div class="agent-workspace">
-          <p class="eyebrow">Your workspace</p>
-          <h1 id="app-title">{activeApp.title}</h1>
-          <p class="welcome">{activeDefinition.tagline}</p>
-          <div class="workspace-note"><span aria-hidden="true"><AppIcon type={activeDefinition.id} /></span><p>Your {activeDefinition.title} workspace is ready.<small>{activeDefinition.connection}</small></p></div>
-        </div>
-        {/if}
+    <div bind:this={appSurface} class="app-surface" class:closing role="dialog" aria-modal="true" aria-label={grouped ? 'App group: ' + activeEntry.title : activeEntry.title} tabindex="-1">
+      <div class="app-content" class:split-layout={grouped}>
+        {#each visibleApps as app (app.id)}
+          {@const definition = availableApps.find(def => def.id === app.type)}
+          {@const side = grouped ? activeEntry.apps.indexOf(app) : 0}
+          <section class="app-pane" bind:this={paneElements[app.id]} class:focused={activeApp?.id === app.id && !pickerOpen} style:grid-column={side + 1} style:--app-glow={definition.glow} style:--app-base={definition.base} style:--app-ink={definition.ink} aria-label={app.title}>
+            {#if grouped}<button class="pane-heading" aria-pressed={activeApp?.id === app.id && !pickerOpen} disabled={pickerOpen} onclick={() => act(side === 0 ? 'tile-left' : 'tile-right')}><kbd>{side === 0 ? 'L1' : 'R1'}</kbd><span>{app.title}</span><small>{activeApp?.id === app.id && !pickerOpen ? 'Focused' : 'Switch focus'}</small></button>{/if}
+            <div class="pane-body">
+              <AppPane bind:this={panes[app.id]} {app} {definition} tiled={grouped} active={activeApp?.id === app.id && !pickerOpen} canPaste={() => appOpen && activeApp?.id === app.id && !pickerOpen && !voiceOpen && !folderRequest && !closeRequest && !closing} onback={() => act('back')} />
+            </div>
+          </section>
+        {/each}
+        {#if grouped && activeEntry.apps.includes(null)}
+          {@const side = activeEntry.apps.indexOf(null)}
+          <section class="empty-pane" in:fly={{ x: side === 0 ? -28 : 28, delay: reducedMotion ? 0 : 90, duration: reducedMotion ? 0 : 330, easing: cubicOut }} class:focused={!activeApp} style:grid-column={side + 1} aria-label="Empty side">
+            {#if state.groupPicker}
+              {@render picker()}
+            {:else}
+              <button class="pane-heading" aria-pressed={!activeApp} onclick={() => act(side === 0 ? 'tile-left' : 'tile-right')}><kbd>{side === 0 ? 'L1' : 'R1'}</kbd><span>App group</span></button>
+              <button bind:this={emptyButton} class="empty-add" onclick={async () => { await act(side === 0 ? 'tile-left' : 'tile-right'); act('confirm') }}>
+                <span class="empty-plus" aria-hidden="true">+</span><strong>Add an app</strong><span>Choose a workspace for this side</span><small>× / A / Enter · Choose</small>
+              </button>
+              <button class="empty-close" onclick={async () => { await act(side === 0 ? 'tile-left' : 'tile-right'); act('close-empty') }}><span aria-hidden="true">△</span> Close empty side <kbd>delete</kbd></button>
+            {/if}
+          </section>
         {/if}
       </div>
+      {#if !grouped}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
     </div>
   {/if}
 
-  {#if !codexOpen}
+  {#if !codexOpen || grouped}
   <div class="input-hint" aria-live="polite">
+    {#if appOpen && grouped}<span><kbd>L1</kbd> Left · <kbd>R1</kbd> Right</span><span>Alt + ← / →</span>{/if}
+    {#if appOpen && grouped}<span>△ / Y · {activeApp ? 'Close focused app' : 'Close empty side'}</span>{/if}
     {#if controllerConnected}
       <span class="controller-indicator" aria-hidden="true"></span>
-      <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? activeApp.title : '← → Browse'}</span>
-      {#if !appOpen}<span>Bottom button · {pickerOpen ? 'Add' : 'Open'}</span>{/if}
+      <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>
+      {#if !appOpen || pickerOpen || !activeApp}<span>Bottom button · {pickerOpen ? 'Add' : 'Open'}</span>{/if}
       {#if appOpen || pickerOpen}<span>Right button · Back</span>{/if}
-      {#if state.view === 'menu' && activeApp}<span>□ · Close app</span>{/if}
+      {#if state.view === 'menu' && activeEntry}<span>□ · {grouped ? 'Close group' : 'Close app'}</span>{/if}
     {:else}
-      <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? activeApp.title : '← → Browse'}</span>
-      {#if !appOpen}<span><kbd>enter</kbd> {pickerOpen ? 'Add' : 'Open'}</span>{/if}
-      {#if state.view === 'menu' && activeApp}<span><kbd>delete</kbd> Close app</span>{/if}
-      {#if pickerOpen || (appOpen && activeDefinition.id !== 'codex')}<span><kbd>esc</kbd> Back</span>{/if}
+      <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>
+      {#if !appOpen || pickerOpen || !activeApp}<span><kbd>enter</kbd> {pickerOpen ? 'Add' : 'Open'}</span>{/if}
+      {#if state.view === 'menu' && activeEntry}<span><kbd>delete</kbd> {grouped ? 'Close group' : 'Close app'}</span>{/if}
+      {#if pickerOpen || (appOpen && activeDefinition?.id !== 'codex')}<span><kbd>esc</kbd> Back</span>{/if}
     {/if}
   </div>
   {/if}

@@ -4,42 +4,52 @@ export function createVoiceCapture({ configured, record, transcribe, copy, chang
   let state = { phase: 'idle', text: '', error: '', stream: null }
   let generation = 0, held = false, recording, upload
   const emit = patch => { state = { ...state, ...patch }; changed(state) }
-  function cancel() {
+  function stopWork() {
     generation++
     held = false
     recording?.cancel()
     recording = undefined
     upload?.abort()
     upload = undefined
+  }
+  function cancel() {
+    stopWork()
     emit({ phase: 'idle', stream: null, text: '', error: '' })
   }
+  function fail(error) {
+    stopWork()
+    emit({ phase: state.text ? 'ready' : 'error', stream: null, error: error.message })
+  }
   async function press() {
-    if (held || ['preparing', 'recording', 'transcribing'].includes(state.phase)) return
-    cancel()
+    if (held || ['preparing', 'recording', 'transcribing', 'copying'].includes(state.phase)) return
+    // Start another take without dismissing the overlay or clearing its draft.
+    stopWork()
     held = true
     const id = generation
-    emit({ phase: 'preparing' })
+    emit({ phase: 'preparing', stream: null, error: '' })
     try {
       if (!await configured()) throw new Error('Add your Whisper API key in Settings to enable transcription.')
       if (id !== generation || !held) return
       const next = await record(error => {
         if (id !== generation) return
-        cancel()
-        emit({ phase: 'error', error: error.message })
+        fail(error)
       })
       if (id !== generation || !held) { next.cancel(); return }
       recording = next
       emit({ phase: 'recording', stream: next.stream })
     } catch (error) {
       if (id !== generation) return
-      held = false
-      emit({ phase: 'error', error: error.message, stream: null })
+      fail(error)
     }
   }
   async function release() {
     if (!held) return
     held = false
-    if (!recording) { cancel(); return }
+    if (!recording) {
+      stopWork()
+      emit({ phase: state.text ? 'ready' : 'idle', stream: null, error: '' })
+      return
+    }
     const id = generation, current = recording
     emit({ phase: 'transcribing', stream: null })
     try {
@@ -51,11 +61,11 @@ export function createVoiceCapture({ configured, record, transcribe, copy, chang
       const result = await transcribe(audio, upload.signal)
       if (id !== generation) return
       upload = undefined
-      emit({ phase: 'ready', text: result.text.trim(), error: '' })
+      const addition = result.text.trim()
+      emit({ phase: 'ready', text: [state.text, addition].filter(Boolean).join(' '), error: !addition && state.text ? 'No additional speech was detected. Hold R2 to try again.' : '' })
     } catch (error) {
       if (id !== generation) return
-      recording = undefined
-      emit({ phase: 'error', error: error.message })
+      fail(error)
     }
   }
   async function confirm() {

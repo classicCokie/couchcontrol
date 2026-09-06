@@ -4,15 +4,29 @@
   import { FitAddon } from '@xterm/addon-fit'
   import '@xterm/xterm/css/xterm.css'
   import { terminalURL } from './api.js'
-  import { isEmptyComposer } from './composer.js'
+  import { isEmptyComposer, composerState } from './composer.js'
   import { createClipboardPaste } from './paste.js'
+  import { createCommandSender } from './commands.js'
+  import { isTerminalReport, createInputClearer } from './input.js'
 
   export let oncancel = () => {}
+  export let active = true
   export let openSession
   export let canPaste = () => true
+  export let canCommand = canPaste
   let host, pasteError = ''
+  let focus = () => {}
+  export function focusInput() { focus() }
   let paste = () => {}
   let enter = () => {}
+  let commandSnapshot = () => null, command = () => 'Wait for Codex to connect.', key = () => {}
+  let composerReady = () => false
+  let clearInput = () => 'Wait for Codex to connect.'
+  export function clearPrompt(snapshot) { return clearInput(snapshot) }
+  export function captureCommandInput() { return commandSnapshot() }
+  export function runCommand(value, snapshot) { return command(value, snapshot) }
+  export function pressKey(action) { key(action) }
+  export function isComposerReady() { return composerReady() }
   let captureEmpty = () => null, pasteEmpty = () => false
   export function captureEmptyInput() { return captureEmpty() }
   export function pasteIfEmpty(text, snapshot) { return pasteEmpty(text, snapshot) }
@@ -30,9 +44,10 @@
     term.loadAddon(fit)
     term.open(host)
     fit.fit()
-    term.focus()
+    focus = () => { if (active && canPaste()) term.focus() }
+    focus()
     // Keep the app-switcher shortcut out of the CLI's input stream.
-    term.attachCustomKeyEventHandler(event => !(event.ctrlKey && event.shiftKey && event.key === 'Backspace'))
+    term.attachCustomKeyEventHandler(event => active && canPaste() && !(event.ctrlKey && event.shiftKey && event.key === 'Backspace') && !(event.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'Delete'].includes(event.key)))
     let session, socket, disposed = false, ready = false, ended = false, retry, liveStartup = false
     let inputRevision = 0
     const inputTarget = () => !disposed && !document.hidden && ready && socket?.readyState === WebSocket.OPEN && canPaste() ? socket : null
@@ -58,6 +73,23 @@
       send({ type: 'input', data: '\r' })
       term.focus()
     }
+    const commandTarget = () => !disposed && active && !document.hidden && ready && socket?.readyState === WebSocket.OPEN && canCommand() ? socket : null
+    composerReady = () => !!commandTarget() && isEmptyComposer(term.buffer.active)
+    commandSnapshot = () => commandTarget() ? { socket, revision: inputRevision } : null
+    command = createCommandSender({ target: commandTarget, revision: () => inputRevision, empty: () => isEmptyComposer(term.buffer.active),
+      send: data => { inputRevision++; send({ type: 'input', data }) },
+    })
+    const clearer = createInputClearer({ target: commandTarget, composer: () => composerState(term.buffer.active), revision: () => inputRevision,
+      send: data => { inputRevision++; send({ type: 'input', data }) },
+    })
+    clearInput = clearer.clear
+    key = action => {
+      const data = { up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C', back: '\x1b' }[action]
+      if (!data || !inputTarget()) return
+      inputRevision++
+      send({ type: 'input', data })
+      focus()
+    }
     const resize = () => {
       if (disposed || !host.clientWidth || !host.clientHeight) return
       // Preserve the recorded dimensions until terminal history finishes replaying.
@@ -66,7 +98,7 @@
       if (ready) send({ type: 'resize', cols: Math.max(20, Math.min(500, term.cols)), rows: Math.max(5, Math.min(200, term.rows)) })
     }
     const input = term.onData(data => {
-      inputRevision++
+      if (!isTerminalReport(data)) { inputRevision++; clearer.edited() }
       // Bound each frame without splitting Unicode surrogate pairs during a paste.
       let chunk = ''
       for (const character of data) {
@@ -100,7 +132,7 @@
             if (disposed || current !== socket || current.readyState !== WebSocket.OPEN) return
             ready = true
             resize()
-            term.focus()
+            focus()
           })
         }
         if (message.type === 'exit') {
