@@ -37,7 +37,7 @@
   <div bind:this={dialog} class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-app-title" aria-describedby="close-app-description" aria-busy={busy} tabindex="-1"
     transition:fly={{ y: 24, duration: reducedMotion ? 0 : 220, easing: cubicOut }}>
     <h2 id="close-app-title">Close {app.title}?</h2>
-    <p id="close-app-description">{app.type === 'group' ? 'This will close both apps in this group, stop any running Codex processes, and remove their saved terminal sessions.' : app.type === 'codex' ? 'This will stop its running process and remove its saved terminal session.' : 'Are you sure you want to close this app?'}</p>
+    <p id="close-app-description">{app.type === 'group' ? 'This will close both apps in this group, stop any running CLI processes, and remove their saved terminal sessions.' : ['codex', 'claude'].includes(app.type) ? 'This will stop its running process and remove its saved terminal session.' : 'Are you sure you want to close this app?'}</p>
     {#if app.groupId !== undefined}<p class="scope-note">Only this app will close. Any app on the other side stays open.</p>{/if}
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <footer>

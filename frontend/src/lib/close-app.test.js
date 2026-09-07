@@ -52,3 +52,13 @@ test('closing the only occupied pane returns to the shelf with no empty group', 
   assert.equal(closed.apps.some(app => app.type === 'group'), false)
   assert.equal(closed.apps[0].type, 'settings')
 })
+
+test('a mixed Codex and Claude group closes each provider independently', async () => {
+  const state = group('claude'), entry = state.apps.at(-1), calls = []
+  const closed = await closeAppRequest(state, entry, async (title, provider) => calls.push([title, provider]))
+  assert.deepEqual(calls, entry.apps.map(app => [app.title, app.type]))
+  assert.equal(closed.apps.some(app => app.id === entry.id), false)
+  let saved
+  saveSwitcher(state, { setItem: (_, value) => { saved = value } })
+  assert.deepEqual(restoreSwitcher({ getItem: () => saved }).apps, state.apps)
+})

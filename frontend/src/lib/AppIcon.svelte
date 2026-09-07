@@ -15,6 +15,8 @@
     <path d="m14 5 5 5M4 20l5-1L21 7a2 2 0 0 0 0-3l-1-1a2 2 0 0 0-3 0L5 15Z" /><path d="M13 21h8" />
   {:else if type === 'codex'}
     <rect x="2" y="3" width="20" height="18" rx="4" /><path d="m6 8 4 4-4 4m7 0h5" />
+  {:else if type === 'claude'}
+    <rect x="2" y="3" width="20" height="18" rx="4" /><path d="m6 8 4 4-4 4m7-7v6m-2-3h4" />
   {:else if type === 'settings'}
     <path d="m9 3-.5 3-2 1-2.8-1-2 3.5L4 11v2l-2.3 1.5 2 3.5 2.8-1 2 1 .5 3h6l.5-3 2-1 2.8 1 2-3.5L20 13v-2l2.3-1.5-2-3.5-2.8 1-2-1-.5-3Z" /><circle cx="12" cy="12" r="3" />
   {/if}

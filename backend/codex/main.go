@@ -17,6 +17,7 @@ import (
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8787", "HTTP listen address")
 	dbPath := flag.String("db", "data/codex.sqlite", "SQLite database path")
+	claudeDBPath := flag.String("claude-db", "", "Claude SQLite database (default: claude.sqlite beside -db)")
 	cwd := flag.String("cwd", "../..", "default Codex workspace")
 	staticDir := flag.String("static", "../../frontend/dist", "built frontend directory (empty disables)")
 	origins := flag.String("origins", "http://127.0.0.1:8787,http://localhost:8787,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173", "comma-separated allowed browser origins")
@@ -37,7 +38,7 @@ func main() {
 	token := os.Getenv("CODEX_WEB_TOKEN")
 	if token == "" {
 		token = randomID()
-		log.Printf("Codex web access token: %s", token)
+		log.Printf("CouchControl terminal access token: %s", token)
 	}
 	if len(token) < 32 {
 		log.Fatal("CODEX_WEB_TOKEN must be at least 32 characters")
@@ -47,14 +48,39 @@ func main() {
 		binary = "codex"
 	}
 	m := &manager{db: db, binary: binary, cwd: workspace, active: map[string]*process{}}
-	s := &server{manager: m, token: token, origins: allowed, hosts: hosts}
+	if *claudeDBPath == "" {
+		*claudeDBPath = filepath.Join(filepath.Dir(*dbPath), "claude.sqlite")
+	}
+	codexPath, _ := filepath.Abs(*dbPath)
+	claudePath, err := filepath.Abs(*claudeDBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	codexInfo, codexErr := os.Stat(codexPath)
+	claudeInfo, claudeErr := os.Stat(claudePath)
+	if codexPath == claudePath || (codexErr == nil && claudeErr == nil && os.SameFile(codexInfo, claudeInfo)) {
+		log.Fatal("Codex and Claude must use separate databases")
+	}
+	claudeDB, err := openStore(claudePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer claudeDB.Close()
+	claudeBinary := os.Getenv("CLAUDE_WEB_BINARY")
+	if claudeBinary == "" {
+		claudeBinary = "claude"
+	}
+	cm := &manager{db: claudeDB, binary: claudeBinary, cwd: workspace, provider: "claude", active: map[string]*process{}}
+	s := &server{manager: m, token: token, origins: allowed, hosts: hosts,
+		claude: &server{manager: cm, provider: "claude", token: token, origins: allowed, hosts: hosts}}
+
 	httpServer := &http.Server{Addr: *listen, Handler: s.handler(*staticDir), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	defer s.browser.Close()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	failure := make(chan error, 1)
 	go func() {
-		log.Printf("Codex webshell listening on %s (workspace %s)", *listen, workspace)
+		log.Printf("CouchControl webshell (Codex + Claude) listening on %s (workspace %s)", *listen, workspace)
 		failure <- httpServer.ListenAndServe()
 	}()
 	select {
@@ -68,4 +94,5 @@ func main() {
 	defer stop()
 	httpServer.Shutdown(shutdown)
 	m.shutdown()
+	cm.shutdown()
 }

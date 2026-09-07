@@ -30,8 +30,12 @@ or “Scroll down” to interact. Chrome must be installed on the backend host;
 backend machine. See the [Browser app notes](frontend/src/apps/browser/README.md)
 for session lifetime and current interaction limits.
 
-The **Codex** app opens the local Codex CLI through a web terminal, backed by a
-separate Go service and SQLite session history.
+The **Codex** and **Claude** apps open their respective local CLIs through web
+terminals, backed by one Go service and separate SQLite session histories.
+Claude uses the installed Claude Code CLI and its existing host login. Both apps
+support the folder picker, controller controls, clipboard and voice paste, quick
+commands, reconnecting sessions, and split panes. See the [Claude app notes](frontend/src/apps/claude/README.md)
+for setup and configuration.
 
 Start the backend in one terminal:
 
@@ -144,7 +148,7 @@ For native pickers such as model selection, use **↑ / ↓** and **Cross / A**;
 **Circle / B** backs out of the picker. Commands require an empty Codex prompt
 except **Clear input**, and are never inserted over an existing draft or sent to
 a replacement session. Terminal focus notifications do not count as prompt edits.
-The quick menu is specific to Codex and does not open in other apps.
+Claude has its own quick menu with Claude commands; other apps do not open this menu.
 
 The command names and descriptions follow the
 [official Codex CLI command reference](https://learn.chatgpt.com/docs/developer-commands#built-in-slash-commands).

@@ -15,21 +15,21 @@ export const commands = [
   { command: '/', title: 'All Codex commands', detail: 'Browse the CLI’s complete command list.', menu: true },
 ]
 
-export function commandSelection(selected, action) {
+export function commandSelection(selected, action, entries = commands) {
   const change = { up: -1, 'right-stick-up': -1, down: 1, 'right-stick-down': 1 }[action] || 0
-  return Math.max(0, Math.min(commands.length - 1, selected + change))
+  return Math.max(0, Math.min(entries.length - 1, selected + change))
 }
 
 // Never mix a command into an existing draft, a native dialog, or a replacement
 // connection. Send the command and Enter together, once, to the captured session.
-export function createCommandSender({ target, revision, empty, send }) {
+export function createCommandSender({ target, revision, empty, send, entries = commands, label = 'Codex' }) {
   return (command, snapshot) => {
-    if (!commands.some(entry => entry.command === command && !entry.action)) return 'This command is not available.'
+    if (!entries.some(entry => entry.command === command && !entry.action)) return 'This command is not available.'
     const destination = target()
-    if (!destination) return 'Wait for Codex to connect, then reopen Commands.'
-    if (!snapshot || snapshot.socket !== destination) return 'Codex reconnected. Reopen Commands to use this session.'
+    if (!destination) return `Wait for ${label} to connect, then reopen Commands.`
+    if (!snapshot || snapshot.socket !== destination) return `${label} reconnected. Reopen Commands to use this session.`
     if (snapshot.revision !== revision()) return 'The prompt changed while Commands was open. Reopen Commands and try again.'
-    if (!empty()) return 'Clear the current input or close the Codex dialog before running this command.'
+    if (!empty()) return `Clear the current input or close the ${label} dialog before running this command.`
     send(command === '/' ? '/' : command + '\r')
     return ''
   }

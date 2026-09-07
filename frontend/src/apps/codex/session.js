@@ -1,4 +1,4 @@
-import { request } from './api.js'
+import { request, createTerminalAPI } from './api.js'
 
 // Share in-flight opens across mounts so leaving and returning during startup
 // cannot create two processes for the same card.
@@ -34,3 +34,6 @@ export function createSessionOpener(api = request) {
 }
 
 export const openAppSession = createSessionOpener()
+
+export const openClaudeSession = createSessionOpener(createTerminalAPI('claude', 'Claude').request)
+export const sessionFor = provider => provider === 'claude' ? openClaudeSession : openAppSession

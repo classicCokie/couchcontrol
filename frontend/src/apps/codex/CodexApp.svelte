@@ -3,8 +3,9 @@
   import { FOLDER_PICKER } from '../../features/folders/context.js'
   import Terminal from './Terminal.svelte'
   import CommandMenu from './CommandMenu.svelte'
-  import { openAppSession } from './session.js'
-  import { request } from './api.js'
+  import { terminalProfiles } from './profiles.js'
+  export let provider = 'codex'
+  $: profile = terminalProfiles[provider]
 
   export let title = 'Codex'
   export let active = true
@@ -13,7 +14,7 @@
   const chooseFolder = getContext(FOLDER_PICKER)
   let terminal, commandMenu, menuOpen = false, menuError = '', snapshot, nativeMenu = false, inputError = ''
   let needsToken = false, token = '', tokenError = '', signingIn = false, tokenInput, tokenForm
-  $: tokenId = `codex-access-token-${encodeURIComponent(title)}`
+  $: tokenId = `${provider}-access-token-${encodeURIComponent(title)}`
   async function requireToken() {
     needsToken = true
     menuOpen = false
@@ -28,7 +29,7 @@
     signingIn = true
     tokenError = ''
     try {
-      await request('/auth', 'POST', { token: token.trim() })
+      await profile.request('/auth', 'POST', { token: token.trim() })
       token = ''
       needsToken = false
     } catch (error) {
@@ -54,8 +55,8 @@
   async function selectCommand(entry) {
     if (!menuOpen) return
     menuError = entry.action === 'clear-input'
-      ? (nativeMenu ? 'Close the Codex dialog before clearing input.' : !snapshot ? 'Reopen Commands once Codex is connected.' : terminal?.clearPrompt(snapshot) ?? 'Wait for Codex to connect.')
-      : terminal?.runCommand(entry.command, snapshot) ?? 'Wait for Codex to connect.'
+      ? (nativeMenu ? `Close the ${profile.label} dialog before clearing input.` : !snapshot ? `Reopen Commands once ${profile.label} is connected.` : terminal?.clearPrompt(snapshot) ?? `Wait for ${profile.label} to connect.`)
+      : terminal?.runCommand(entry.command, snapshot) ?? `Wait for ${profile.label} to connect.`
     if (menuError) return
     nativeMenu = !!entry.menu
     await cancelCommands()
@@ -73,7 +74,8 @@
         return true
       }
     }
-    if (action === 'left') { inputError = terminal?.clearPrompt() ?? 'Wait for Codex to connect.'; return true }
+    if (provider === 'claude' && !terminal?.isComposerReady() && ['up', 'down', 'right'].includes(action)) { terminal?.pressKey(action); return true }
+    if (action === 'left') { inputError = terminal?.clearPrompt() ?? `Wait for ${profile.label} to connect.`; return true }
     if (action === 'right-stick-down') { openCommands(); return true }
     return false
   }
@@ -98,7 +100,7 @@
 {#if needsToken}
   <div class="token-screen">
     <form class="token-form" bind:this={tokenForm} onsubmit={signIn} aria-busy={signingIn}>
-      <label for={tokenId}>Enter your Codex access token</label>
+      <label for={tokenId}>Enter your {profile.label} access token</label>
       <input id={tokenId} bind:this={tokenInput} bind:value={token} type="password" autocomplete="off" spellcheck="false" placeholder="Access token" required aria-invalid={!!tokenError} aria-describedby={tokenError ? `${tokenId}-error` : undefined} />
       {#if tokenError}<p id={`${tokenId}-error`} class="token-error" role="alert">{tokenError}</p>{/if}
       <button type="submit" disabled={signingIn || !token.trim()}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
@@ -106,11 +108,11 @@
   </div>
 {:else}
 <div class="codex-terminal" inert={menuOpen}>
-<Terminal bind:this={terminal} {active} canPaste={() => canPaste() && !menuOpen} canCommand={canPaste} {oncancel} onauthrequired={requireToken} openSession={signal => openAppSession(title, () => signal.aborted ? null : chooseFolder({ signal, title: `Choose a folder for ${title}` }))} />
+<Terminal bind:this={terminal} {profile} {active} canPaste={() => canPaste() && !menuOpen} canCommand={canPaste} {oncancel} onauthrequired={requireToken} openSession={signal => profile.openSession(title, () => signal.aborted ? null : chooseFolder({ signal, title: `Choose a folder for ${title}` }))} />
 
 </div>
 {#if menuOpen}
-  <CommandMenu bind:this={commandMenu} error={menuError} onselect={selectCommand} oncancel={cancelCommands} />
+  <CommandMenu bind:this={commandMenu} commands={profile.commands} label={profile.label} error={menuError} onselect={selectCommand} oncancel={cancelCommands} />
 {:else}
   <button class="commands-button" onclick={openCommands}>Commands <kbd>Right stick ↓</kbd></button>
   {#if inputError}<p class="input-error" role="status">{inputError}</p>{/if}

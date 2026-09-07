@@ -26,7 +26,7 @@ func testServer(t *testing.T) (*server, string) {
 	}
 	binary := filepath.Join(dir, "fake-codex")
 	// A real PTY subprocess: terminal dimensions, byte fidelity, input, and process exit are exercised without a model call.
-	script := "#!/bin/sh\nstty -echo\nprintf 'ARGS:%s\\n' \"$*\"\nprintf 'TOKEN:%s\\n' \"$CODEX_WEB_TOKEN\"\npwd\nstty size\nprintf 'READY λ\\n'\nwhile IFS= read -r line; do\n [ \"$line\" = quit ] && exit 0\n if [ \"$line\" = size ]; then stty size; else printf 'REPLY:%s\\n' \"$line\"; fi\ndone\n"
+	script := "#!/bin/sh\nstty -echo\nprintf 'ARGS:%s\\n' \"$*\"\nprintf 'TOKEN:%s\\n' \"$CODEX_WEB_TOKEN $CLAUDE_WEB_TOKEN\"\npwd\nstty size\nprintf 'READY λ\\n'\nwhile IFS= read -r line; do\n [ \"$line\" = quit ] && exit 0\n if [ \"$line\" = size ]; then stty size; else printf 'REPLY:%s\\n' \"$line\"; fi\ndone\n"
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}

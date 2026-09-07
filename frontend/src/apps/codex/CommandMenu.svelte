@@ -1,9 +1,11 @@
 <script>
   import { onMount, tick } from 'svelte'
-  import { commands, commandSelection } from './commands.js'
+  import { commands as defaultCommands, commandSelection } from './commands.js'
   export let onselect = () => {}
   export let oncancel = () => {}
   export let error = ''
+  export let commands = defaultCommands
+  export let label = 'Codex'
   let selected = 0, dialog, list
   async function focusSelection() {
     await tick()
@@ -15,7 +17,7 @@
     if (action === 'back') oncancel()
     else if (action === 'confirm') onselect(commands[selected])
     else {
-      const next = commandSelection(selected, action)
+      const next = commandSelection(selected, action, commands)
       if (next !== selected) { selected = next; focusSelection() }
     }
     return true
@@ -41,8 +43,8 @@
 
 <div class="command-backdrop">
   <div bind:this={dialog} class="command-menu" role="dialog" aria-modal="true" aria-labelledby="command-title" aria-describedby="command-hint" tabindex="-1">
-    <header><p>Codex</p><h2 id="command-title">Quick commands</h2></header>
-    <div bind:this={list} class="command-list" role="toolbar" aria-label="Codex slash commands" aria-orientation="vertical">
+    <header><p>{label}</p><h2 id="command-title">Quick commands</h2></header>
+    <div bind:this={list} class="command-list" role="toolbar" aria-label={`${label} slash commands`} aria-orientation="vertical">
       {#each commands as entry, index (entry.command)}
         <button class:selected={selected === index} tabindex={selected === index ? 0 : -1} onfocus={() => { selected = index }} onclick={() => onselect(entry)}>
           <span><strong>{entry.title}</strong><small>{entry.detail}</small></span><code>{entry.action === 'clear-input' ? '←' : entry.command}</code>

@@ -3,8 +3,8 @@
   import { Terminal } from '@xterm/xterm'
   import { FitAddon } from '@xterm/addon-fit'
   import '@xterm/xterm/css/xterm.css'
-  import { terminalURL } from './api.js'
-  import { isEmptyComposer, composerState } from './composer.js'
+  import { terminalProfiles } from './profiles.js'
+  export let profile = terminalProfiles.codex
   import { createClipboardPaste } from './paste.js'
   import { createCommandSender } from './commands.js'
   import { isTerminalReport, createInputClearer } from './input.js'
@@ -20,9 +20,9 @@
   export function focusInput() { focus() }
   let paste = () => {}
   let enter = () => {}
-  let commandSnapshot = () => null, command = () => 'Wait for Codex to connect.', key = () => {}
+  let commandSnapshot = () => null, command = () => `Wait for ${profile.label} to connect.`, key = () => {}
   let composerReady = () => false
-  let clearInput = () => 'Wait for Codex to connect.'
+  let clearInput = () => `Wait for ${profile.label} to connect.`
   export function clearPrompt(snapshot) { return clearInput(snapshot) }
   export function captureCommandInput() { return commandSnapshot() }
   export function runCommand(value, snapshot) { return command(value, snapshot) }
@@ -52,9 +52,9 @@
     let session, socket, disposed = false, ready = false, ended = false, retry, liveStartup = false
     let inputRevision = 0
     const inputTarget = () => !disposed && !document.hidden && ready && socket?.readyState === WebSocket.OPEN && canPaste() ? socket : null
-    captureEmpty = () => inputTarget() && isEmptyComposer(term.buffer.active) ? { socket, revision: inputRevision } : null
+    captureEmpty = () => inputTarget() && profile.isEmptyComposer(term.buffer.active) ? { socket, revision: inputRevision } : null
     pasteEmpty = (text, snapshot) => {
-      if (!snapshot || !text || inputTarget() !== snapshot.socket || inputRevision !== snapshot.revision || !isEmptyComposer(term.buffer.active)) return false
+      if (!snapshot || !text || inputTarget() !== snapshot.socket || inputRevision !== snapshot.revision || !profile.isEmptyComposer(term.buffer.active)) return false
       term.paste(text)
       term.focus()
       return true
@@ -75,12 +75,12 @@
       term.focus()
     }
     const commandTarget = () => !disposed && active && !document.hidden && ready && socket?.readyState === WebSocket.OPEN && canCommand() ? socket : null
-    composerReady = () => !!commandTarget() && isEmptyComposer(term.buffer.active)
+    composerReady = () => !!commandTarget() && profile.isEmptyComposer(term.buffer.active)
     commandSnapshot = () => commandTarget() ? { socket, revision: inputRevision } : null
-    command = createCommandSender({ target: commandTarget, revision: () => inputRevision, empty: () => isEmptyComposer(term.buffer.active),
+    command = createCommandSender({ entries: profile.commands, label: profile.label, target: commandTarget, revision: () => inputRevision, empty: () => profile.isEmptyComposer(term.buffer.active),
       send: data => { inputRevision++; send({ type: 'input', data }) },
     })
-    const clearer = createInputClearer({ target: commandTarget, composer: () => composerState(term.buffer.active), revision: () => inputRevision,
+    const clearer = createInputClearer({ label: profile.label, target: commandTarget, composer: () => profile.composerState(term.buffer.active), revision: () => inputRevision,
       send: data => { inputRevision++; send({ type: 'input', data }) },
     })
     clearInput = clearer.clear
@@ -116,7 +116,7 @@
       liveStartup = false
       ended = false
       term.reset()
-      const current = new WebSocket(terminalURL(session.id))
+      const current = new WebSocket(profile.terminalURL(session.id))
       socket = current
       current.binaryType = 'arraybuffer'
       current.onmessage = event => {

@@ -5,6 +5,7 @@ export const availableApps = [
   { id: 'browser', title: 'Browser', icon: '◎', glow: '#92734d', base: '#362a1c', ink: '#f7d6a5', tagline: 'Room to explore.', connection: 'A browsing session hasn’t been connected yet.' },
   { id: 'write', title: 'Notes', icon: '✎', glow: '#926c6b', base: '#382426', ink: '#ffd1c7', tagline: 'A quiet place for your thoughts.', connection: 'Dictate your thoughts into beautiful notes.' },
   { id: 'codex', title: 'Codex', icon: '>_', glow: '#375c50', base: '#112820', ink: '#c0eccc', tagline: 'Your local Codex, from anywhere.', connection: 'Open a terminal on your machine.' },
+  { id: 'claude', title: 'Claude', icon: '>_', glow: '#a06e55', base: '#35251f', ink: '#f4d1b8', tagline: 'Your local Claude Code, from anywhere.', connection: 'Open Claude Code on your machine.' },
   { id: 'settings', title: 'Settings', icon: '⚙', glow: '#526584', base: '#1b273b', ink: '#cedfff', tagline: 'Make yourself at home.', connection: 'General app preferences.' },
 ]
 export const addableApps = availableApps.filter(app => app.id !== 'settings')

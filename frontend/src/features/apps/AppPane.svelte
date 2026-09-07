@@ -29,8 +29,8 @@
 </script>
 
 <div class="pane-content" class:tiled bind:this={content} inert={!active}>
-  {#if definition.id === 'codex'}
-    <CodexApp bind:this={codex} title={app.title} {active} {canPaste} oncancel={onback} />
+  {#if ['codex', 'claude'].includes(definition.id)}
+    <CodexApp provider={definition.id} bind:this={codex} title={app.title} {active} {canPaste} oncancel={onback} />
   {:else if definition.id === 'browser'}
     <BrowserApp bind:this={browser} title={app.title} initialUrl={app.browserUrl || ''} onnavigate={browserUrl => onupdate({ browserUrl })} {active} {canPaste} {onback} />
   {:else if definition.id === 'write'}

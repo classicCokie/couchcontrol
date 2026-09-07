@@ -28,6 +28,7 @@ type process struct {
 type manager struct {
 	db          *sql.DB
 	binary, cwd string
+	provider    string
 	mu          sync.Mutex
 	active      map[string]*process
 	closing     bool
@@ -71,8 +72,15 @@ func (m *manager) start(title, cwd, mode string, cols, rows int) (session, error
 		return session{}, errors.New("session name is too long")
 	}
 	args := []string{"--no-alt-screen", "--sandbox", "workspace-write", "--ask-for-approval", "on-request"}
+	if m.provider == "claude" {
+		args = []string{"--permission-mode", "default"}
+	}
 	if mode == "resume" {
-		args = append(args, "resume")
+		if m.provider == "claude" {
+			args = append(args, "--resume")
+		} else {
+			args = append(args, "resume")
+		}
 	} else if mode != "" && mode != "new" {
 		return session{}, errors.New("invalid session mode")
 	}
@@ -80,7 +88,7 @@ func (m *manager) start(title, cwd, mode string, cols, rows int) (session, error
 	cmd.Dir = cwd
 	// Do not pass the webshell access token into the agent's environment.
 	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "CODEX_WEB_") && !strings.HasPrefix(entry, "TERM=") && !strings.HasPrefix(entry, "COLORTERM=") {
+		if !strings.HasPrefix(entry, "CODEX_WEB_") && !strings.HasPrefix(entry, "CLAUDE_WEB_") && !strings.HasPrefix(entry, "TERM=") && !strings.HasPrefix(entry, "COLORTERM=") {
 			cmd.Env = append(cmd.Env, entry)
 		}
 	}
@@ -93,7 +101,11 @@ func (m *manager) start(title, cwd, mode string, cols, rows int) (session, error
 	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
 		m.db.Exec("UPDATE sessions SET status='failed' WHERE id=?", id)
-		return session{}, fmt.Errorf("could not start Codex; install the CLI on this host and check CODEX_WEB_BINARY: %w", err)
+		name, setting := "Codex", "CODEX_WEB_BINARY"
+		if m.provider == "claude" {
+			name, setting = "Claude", "CLAUDE_WEB_BINARY"
+		}
+		return session{}, fmt.Errorf("could not start %s; install the CLI on this host and check %s: %w", name, setting, err)
 	}
 	p := &process{cmd: cmd, terminal: terminal, done: make(chan struct{})}
 	m.active[id] = p

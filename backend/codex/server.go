@@ -19,11 +19,13 @@ import (
 )
 
 type server struct {
-	browser *browser.Engine
-	manager *manager
-	token   string
-	origins map[string]bool
-	hosts   map[string]bool
+	browser  *browser.Engine
+	claude   *server
+	provider string
+	manager  *manager
+	token    string
+	origins  map[string]bool
+	hosts    map[string]bool
 }
 
 func jsonResponse(w http.ResponseWriter, status int, value any) {
@@ -41,7 +43,7 @@ func decode(w http.ResponseWriter, r *http.Request, value any) error {
 	return json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(value)
 }
 func (s *server) authenticated(r *http.Request) bool {
-	c, err := r.Cookie("codex_access")
+	c, err := r.Cookie(s.appID() + "_access")
 	return err == nil && s.validToken(c.Value)
 }
 func (s *server) validToken(token string) bool {
@@ -78,32 +80,10 @@ func (s *server) handler(staticDir string) http.Handler {
 	browserHandler := browser.New(shared.OpenAIKey, nil)
 	browserHandler.Engine = s.browser
 	browserHandler.Register(mux)
-	{
-		path := "/api/codex/auth"
-		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
-			jsonResponse(w, 200, map[string]bool{"authenticated": s.authenticated(r)})
-		})
-		mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
-			var body struct {
-				Token string `json:"token"`
-			}
-			if decode(w, r, &body) != nil || !(s.validToken(body.Token) || (body.Token == "" && localBrowser(r))) {
-				apiError(w, 401, "Access token is incorrect.")
-				return
-			}
-			http.SetCookie(w, &http.Cookie{Name: "codex_access", Value: s.token, Path: "/api/codex", HttpOnly: true, Secure: r.TLS != nil || strings.HasPrefix(r.Header.Get("Origin"), "https://"), SameSite: http.SameSiteStrictMode, MaxAge: 43200})
-			jsonResponse(w, 200, map[string]bool{"authenticated": true})
-		})
+	s.registerTerminal(mux)
+	if s.claude != nil {
+		s.claude.registerTerminal(mux)
 	}
-	mux.HandleFunc("GET /api/codex/sessions", s.list)
-	mux.HandleFunc("POST /api/codex/sessions", s.create)
-	mux.HandleFunc("POST /api/codex/sessions/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
-		s.manager.stop(r.PathValue("id"))
-		jsonResponse(w, 200, map[string]bool{"stopped": true})
-	})
-	mux.HandleFunc("POST /api/codex/sessions/{id}/close", s.closeSession)
-	mux.HandleFunc("DELETE /api/codex/sessions/{id}", s.remove)
-	mux.HandleFunc("GET /api/codex/sessions/{id}/terminal", s.stream)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { apiError(w, 404, "Not found") })
 	if staticDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(staticDir)))
@@ -123,13 +103,56 @@ func (s *server) handler(staticDir string) http.Handler {
 				apiError(w, 403, "Origin is not allowed")
 				return
 			}
-			if strings.HasPrefix(r.URL.Path, "/api/codex/") && r.URL.Path != "/api/codex/auth" && !s.authenticated(r) {
-				apiError(w, 401, "Connect this browser with the host access token.")
-				return
+			for _, terminal := range []*server{s, s.claude} {
+				if terminal == nil {
+					continue
+				}
+				prefix := "/api/" + terminal.appID()
+				if strings.HasPrefix(r.URL.Path, prefix+"/") && r.URL.Path != prefix+"/auth" && !terminal.authenticated(r) {
+					apiError(w, 401, "Connect this browser with the host access token.")
+					return
+				}
 			}
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (s *server) appID() string {
+	if s.provider == "claude" {
+		return "claude"
+	}
+	return "codex"
+}
+
+func (s *server) registerTerminal(mux *http.ServeMux) {
+	prefix := "/api/" + s.appID()
+	{
+		path := prefix + "/auth"
+		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
+			jsonResponse(w, 200, map[string]bool{"authenticated": s.authenticated(r)})
+		})
+		mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Token string `json:"token"`
+			}
+			if decode(w, r, &body) != nil || !(s.validToken(body.Token) || (body.Token == "" && localBrowser(r))) {
+				apiError(w, 401, "Access token is incorrect.")
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: s.appID() + "_access", Value: s.token, Path: prefix, HttpOnly: true, Secure: r.TLS != nil || strings.HasPrefix(r.Header.Get("Origin"), "https://"), SameSite: http.SameSiteStrictMode, MaxAge: 43200})
+			jsonResponse(w, 200, map[string]bool{"authenticated": true})
+		})
+	}
+	mux.HandleFunc("GET "+prefix+"/sessions", s.list)
+	mux.HandleFunc("POST "+prefix+"/sessions", s.create)
+	mux.HandleFunc("POST "+prefix+"/sessions/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
+		s.manager.stop(r.PathValue("id"))
+		jsonResponse(w, 200, map[string]bool{"stopped": true})
+	})
+	mux.HandleFunc("POST "+prefix+"/sessions/{id}/close", s.closeSession)
+	mux.HandleFunc("DELETE "+prefix+"/sessions/{id}", s.remove)
+	mux.HandleFunc("GET "+prefix+"/sessions/{id}/terminal", s.stream)
 }
 
 func (s *server) list(w http.ResponseWriter, r *http.Request) {

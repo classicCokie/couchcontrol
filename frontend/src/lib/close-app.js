@@ -3,7 +3,7 @@ import { members, removeApp, removeGroupApp } from './switcher.js'
 // Keep the view and its cards intact until the requested sessions are closed.
 export async function closeAppRequest(state, request, closeSession) {
   for (const app of members(request)) {
-    if (app.type === 'codex') await closeSession(app.title)
+    if (['codex', 'claude'].includes(app.type)) await closeSession(app.title, app.type)
   }
   return request.groupId !== undefined
     ? removeGroupApp(state, request.groupId, request.id)

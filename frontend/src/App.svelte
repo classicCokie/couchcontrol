@@ -9,7 +9,7 @@
   import AppPane from './features/apps/AppPane.svelte'
   import CloseAppDialog from './features/apps/CloseAppDialog.svelte'
   import { closeAppRequest } from './lib/close-app.js'
-  import { openAppSession } from './apps/codex/session.js'
+  import { sessionFor } from './apps/codex/session.js'
   import VoiceOverlay from './features/voice/VoiceOverlay.svelte'
   import FolderPicker from './features/folders/FolderPicker.svelte'
   import { FOLDER_PICKER } from './features/folders/context.js'
@@ -35,7 +35,7 @@
     closeBusy = true
     closeError = ''
     try {
-      const next = await closeAppRequest(state, app, openAppSession.close)
+      const next = await closeAppRequest(state, app, (title, provider) => sessionFor(provider).close(title))
       const survivor = app.groupId !== undefined ? visibleApps.find(member => member.id !== app.id) : null
       const play = survivor ? layoutMotion.capture(paneElements[survivor.id], reducedMotion) : null
       state = next
@@ -62,7 +62,7 @@
     const target = voiceTarget
     voiceTarget = null
     await tick()
-    if (target && (codexOpen || browserOpen || notesOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
+    if (target && (terminalOpen || browserOpen || notesOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
       activePane.pasteIfEmpty(text, target.input)
     }
   }
@@ -98,10 +98,10 @@
   $: visibleApps = members(activeEntry)
   $: activeApp = grouped ? activeEntry.apps[activeEntry.focused] : activeEntry
   $: activePane = panes[activeApp?.id]
-  $: codexApp = activePane
+  $: terminalApp = activePane
   $: settingsApp = activePane
   $: activeDefinition = availableApps.find(app => app.id === activeApp?.type)
-  $: codexOpen = appOpen && !pickerOpen && activeDefinition?.id === 'codex'
+  $: terminalOpen = appOpen && !pickerOpen && ['codex', 'claude'].includes(activeDefinition?.id)
   $: settingsOpen = appOpen && !pickerOpen && activeDefinition?.id === 'settings'
   $: notesOpen = appOpen && !pickerOpen && activeDefinition?.id === 'write'
   $: browserOpen = appOpen && !pickerOpen && activeDefinition?.id === 'browser'
@@ -156,13 +156,13 @@
     // Trigger releases must reach Notes even while another overlay owns input.
     if (action === 'mark-end' || action === 'mark-cancel') { activePane?.control(action); return }
     if (action === 'record-start' && !voiceOpen) {
-      voiceTarget = (codexOpen || browserOpen || notesOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
+      voiceTarget = (terminalOpen || browserOpen || notesOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
     }
     if (voiceOverlay?.handleAction(action)) return
     if (folderRequest) { folderPicker?.handleAction(action); return }
     if (closeRequest) { closeDialog?.handleAction(action); return }
     if (closing) return
-    if (codexOpen && codexApp?.control(action)) return
+    if (terminalOpen && terminalApp?.control(action)) return
     if (appOpen && grouped && activeApp && action === 'close-empty') {
       closeError = ''
       closeRequest = { ...activeApp, groupId: activeEntry.id }
@@ -180,12 +180,12 @@
       await focusSelection()
       return
     }
-    if (codexOpen && action === 'confirm') {
-      codexApp?.pressEnter()
+    if (terminalOpen && action === 'confirm') {
+      terminalApp?.pressEnter()
       return
     }
     if (action === 'paste') {
-      if (codexOpen || browserOpen || notesOpen) activePane?.pasteClipboard()
+      if (terminalOpen || browserOpen || notesOpen) activePane?.pasteClipboard()
       else if (state.view === 'menu' && activeEntry) { closeError = ''; closeRequest = activeEntry }
       return
     }
@@ -232,7 +232,7 @@
     if (voiceOpen) return
     if (folderRequest) { folderPicker?.handleKeydown(event); return }
     if (closeRequest) { closeDialog?.handleKeydown(event); return }
-    if (codexOpen && codexApp?.handleKeydown(event)) return
+    if (terminalOpen && terminalApp?.handleKeydown(event)) return
     if (appOpen && grouped && event.key === 'Delete' && (!activeApp || event.altKey)) {
       event.preventDefault()
       if (!event.repeat) act('close-empty')
@@ -257,7 +257,7 @@
       else settingsApp?.handleKeydown(event)
       return
     }
-    if (codexOpen) {
+    if (terminalOpen) {
       if (event.ctrlKey && event.shiftKey && event.key === 'Backspace') {
         event.preventDefault()
         act('back')
@@ -411,7 +411,7 @@
     </div>
   {/if}
 
-  {#if (!codexOpen || grouped) && !notesOpen}
+  {#if (!terminalOpen || grouped) && !notesOpen}
   <div class="input-hint" aria-live="polite">
     {#if appOpen && grouped}<span><kbd>L1</kbd> Left · <kbd>R1</kbd> Right</span><span>Alt + ← / →</span>{/if}
     {#if appOpen && grouped}<span>△ / Y · {activeApp ? 'Close focused app' : 'Close empty side'}</span>{/if}
@@ -426,7 +426,7 @@
       <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>
       {#if !appOpen || pickerOpen || !activeApp}<span><kbd>enter</kbd> {pickerOpen ? 'Add' : 'Open'}</span>{/if}
       {#if state.view === 'menu' && activeEntry}<span><kbd>delete</kbd> {grouped ? 'Close group' : 'Close app'}</span>{/if}
-      {#if pickerOpen || (appOpen && activeDefinition?.id !== 'codex')}<span><kbd>esc</kbd> Back</span>{/if}
+      {#if pickerOpen || (appOpen && !['codex', 'claude'].includes(activeDefinition?.id))}<span><kbd>esc</kbd> Back</span>{/if}
     {/if}
   </div>
   {/if}

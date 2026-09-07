@@ -1,10 +1,13 @@
 # Codex webshell
 
-An isolated Go service for CouchControl's Codex app. It runs the host's installed
+The Go service for CouchControl's Codex and Claude terminal apps. It runs the host's installed
 Codex CLI in a real PTY and streams terminal bytes over authenticated WebSockets.
 The shared Go module is in `backend/go.mod`; app-wide settings and transcription
 are isolated in `backend/platform`. The Svelte client lives in `frontend/src/apps/codex/`. No OpenAI API key is stored
 by this service; Codex uses the host user's existing CLI login and configuration.
+
+The same process also serves `/api/claude` with a separate database and CLI
+manager. See [Claude setup and controls](../../frontend/src/apps/claude/README.md).
 
 ## Run locally
 
@@ -52,6 +55,8 @@ Run `go run . -help` for all flags. Defaults assume the working directory is
 | --- | --- | --- |
 | `-listen` | `127.0.0.1:8787` | HTTP address |
 | `-db` | `data/codex.sqlite` | SQLite database |
+| `-claude-db` | `claude.sqlite` beside `-db` | Separate Claude session database |
+| `CLAUDE_WEB_BINARY` | `claude` on `PATH` | Installed Claude Code executable |
 | `-cwd` | `../..` | Fallback working directory for API clients without a selected folder |
 | `-static` | `../../frontend/dist` | Frontend build served by Go; empty disables |
 | `-origins` | localhost / 127.0.0.1 on 8787, 5173, 4173 | Exact permitted browser origins and HTTP hosts |
@@ -97,14 +102,14 @@ forwarded requests do not qualify for automatic authentication.
   Codex manages its own conversation state in its normal host data directory;
   the webshell’s SQLite terminal archive is separate from that state. The API
   still accepts `mode: "resume"` for operator-created sessions.
-- At most four CLI processes run at once. Each uses `--no-alt-screen`,
+- At most four CLI processes per provider run at once. Codex uses `--no-alt-screen`,
   `--sandbox workspace-write`, and `--ask-for-approval on-request`.
 - Authentication uses an HttpOnly, SameSite=Strict cookie scoped to `/api/codex`.
   Host validation and exact Origin checks protect API writes and WebSockets.
   Token-free cookie setup requires a loopback peer and loopback browser origin,
   with no forwarding headers. Remote clients still require a token.
   A generated token changes on each restart; a configured token stays stable.
-  `CODEX_WEB_*` environment variables are omitted from the CLI child environment.
+  `CODEX_WEB_*` and `CLAUDE_WEB_*` environment variables are omitted from the CLI child environment.
 
 ## Verify
 

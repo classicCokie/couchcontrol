@@ -55,7 +55,7 @@ test('picker owns navigation and shoulders while open and clamps selection', () 
   assert.equal(state.pickerSelected, 0)
   assert.equal(state.apps.at(-1).focused, 1)
   for (let i = 0; i < 30; i++) state = navigate(state, 'down')
-  assert.equal(state.pickerSelected, 5)
+  assert.equal(state.pickerSelected, 6)
   assert.equal(state.view, 'app')
 })
 
@@ -65,7 +65,7 @@ test('instance names include group members and settings stays unique in the cata
   assert.deepEqual(allApps(state).map(app => app.title), ['Settings', 'Agent 1', 'Agent 2', 'Agent 3'])
   const settings = perform(initialSwitcher(), 'right', 'confirm', 'tile-right')
   assert.equal(allApps(settings).filter(app => app.type === 'settings').length, 1)
-  assert.equal(availableApps.filter(def => def.id !== 'settings').length, 6)
+  assert.equal(availableApps.filter(def => def.id !== 'settings').length, 7)
 })
 
 test('closing a group removes its members while preserving other shelf cards', () => {

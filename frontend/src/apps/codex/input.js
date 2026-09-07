@@ -6,17 +6,17 @@ export function isTerminalReport(data) {
 
 // Ctrl+C is Codex's native whole-draft clear. It must never be repeated into an
 // empty prompt, where it can interrupt a task or exit the CLI instead.
-export function createInputClearer({ target, composer, send, revision = () => 0 }) {
+export function createInputClearer({ target, composer, send, revision = () => 0, label = 'Codex' }) {
   let pendingTarget = null
   return {
     edited() { pendingTarget = null },
     clear(snapshot) {
       const destination = target()
-      if (!destination) return 'Wait for Codex to connect before clearing input.'
-      if (snapshot && (snapshot.socket !== destination || snapshot.revision !== revision())) return 'The Codex prompt changed. Reopen Commands before clearing input.'
+      if (!destination) return `Wait for ${label} to connect before clearing input.`
+      if (snapshot && (snapshot.socket !== destination || snapshot.revision !== revision())) return `The ${label} prompt changed. Reopen Commands before clearing input.`
       const state = composer()
       if (state === 'empty') { pendingTarget = null; return '' }
-      if (state !== 'draft') return 'Return to the Codex prompt before clearing input.'
+      if (state !== 'draft') return `Return to the ${label} prompt before clearing input.`
       if (pendingTarget === destination) return ''
       pendingTarget = destination
       send('\x03')
