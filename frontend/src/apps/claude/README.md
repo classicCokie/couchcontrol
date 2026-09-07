@@ -31,10 +31,14 @@ CLI's own saved conversations remain available through `/resume`. Backend
 shutdown stops both providers; restarting marks old terminal sessions interrupted.
 
 Authenticated endpoints mirror Codex under `/api/claude`, including `/auth`,
-`/sessions`, and session `/terminal`, `/stop`, and `/close` routes. Both apps use
-the server's terminal access token (`CODEX_WEB_TOKEN`, or the generated startup
-token), with separate HttpOnly cookies and API paths. Remote browsers can enter
-that token in the app; direct local browsers authenticate automatically.
+`/sessions`, and session `/terminal`, `/stop`, and `/close` routes. Claude connects
+automatically through `/auth`, which sets its own HttpOnly cookie; there is no
+token to copy or enter. The CLI uses the host's existing Claude Code login.
+Host and Origin checks still apply. Any client that can reach the service and
+use an allowed Host and Origin can connect to Claude's terminal, so deployment
+must restrict access to trusted users (for example through a private network
+or an authenticated reverse proxy). Claude's cookie is independent of the
+Codex cookie and changes on backend restart; the app reconnects automatically.
 Both `CODEX_WEB_*` and `CLAUDE_WEB_*` variables are stripped from CLI children.
 
 CLI flags and commands follow the official

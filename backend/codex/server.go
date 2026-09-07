@@ -8,7 +8,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -51,26 +50,6 @@ func (s *server) validToken(token string) bool {
 	return subtle.ConstantTimeCompare(a[:], b[:]) == 1
 }
 
-// Only a direct browser connection on this machine can skip token entry.
-// Remote clients and forwarded requests must still present the access token.
-func localBrowser(r *http.Request) bool {
-	peer, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(peer).IsLoopback() {
-		return false
-	}
-	for _, header := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Real-IP"} {
-		if r.Header.Get(header) != "" {
-			return false
-		}
-	}
-	origin, err := url.Parse(r.Header.Get("Origin"))
-	if err != nil {
-		return false
-	}
-	host := origin.Hostname()
-	return host == "localhost" || net.ParseIP(host).IsLoopback()
-}
-
 func (s *server) handler(staticDir string) http.Handler {
 	mux := http.NewServeMux()
 	shared := platform.New(s.manager.db, nil)
@@ -109,7 +88,7 @@ func (s *server) handler(staticDir string) http.Handler {
 				}
 				prefix := "/api/" + terminal.appID()
 				if strings.HasPrefix(r.URL.Path, prefix+"/") && r.URL.Path != prefix+"/auth" && !terminal.authenticated(r) {
-					apiError(w, 401, "Connect this browser with the host access token.")
+					apiError(w, 401, "Reconnect this browser to CouchControl.")
 					return
 				}
 			}
@@ -133,11 +112,11 @@ func (s *server) registerTerminal(mux *http.ServeMux) {
 			jsonResponse(w, 200, map[string]bool{"authenticated": s.authenticated(r)})
 		})
 		mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
-			var body struct {
-				Token string `json:"token"`
-			}
-			if decode(w, r, &body) != nil || !(s.validToken(body.Token) || (body.Token == "" && localBrowser(r))) {
-				apiError(w, 401, "Access token is incorrect.")
+			// Host and Origin have been validated by handler. Both terminal apps
+			// establish their browser cookie automatically, including remote clients.
+			var body struct{}
+			if decode(w, r, &body) != nil {
+				apiError(w, 400, "Expected a JSON object.")
 				return
 			}
 			http.SetCookie(w, &http.Cookie{Name: s.appID() + "_access", Value: s.token, Path: prefix, HttpOnly: true, Secure: r.TLS != nil || strings.HasPrefix(r.Header.Get("Origin"), "https://"), SameSite: http.SameSiteStrictMode, MaxAge: 43200})

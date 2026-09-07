@@ -57,7 +57,7 @@ func TestAuthenticationAndOriginBoundaries(t *testing.T) {
 		status                                  int
 	}{
 		{"unauthenticated", "GET", "/api/codex/sessions", "", "", "", 401},
-		{"bad token", "POST", "/api/codex/auth", `{"token":"wrong"}`, "http://localhost:5173", "", 401},
+		{"automatic connection", "POST", "/api/codex/auth", `{}`, "http://localhost:5173", "", 200},
 		{"cross origin login", "POST", "/api/codex/auth", `{"token":"` + s.token + `"}`, "https://attacker.example", "", 403},
 		{"missing origin", "POST", "/api/codex/sessions", `{}`, "", s.token, 403},
 		{"cross origin read", "GET", "/api/codex/sessions", "", "https://attacker.example", s.token, 403},
@@ -231,7 +231,7 @@ func TestRecoveryValidationAndStop(t *testing.T) {
 	}
 }
 
-func TestLocalBrowserAutomaticAuthentication(t *testing.T) {
+func TestBrowserAutomaticAuthentication(t *testing.T) {
 	s, _ := testServer(t)
 	for _, tc := range []struct {
 		name, peer, origin, forwarded string
@@ -239,8 +239,8 @@ func TestLocalBrowserAutomaticAuthentication(t *testing.T) {
 	}{
 		{"local browser", "127.0.0.1:54321", "http://localhost:5173", "", 200},
 		{"IPv6 browser", "[::1]:54321", "http://localhost:5173", "", 200},
-		{"remote peer", "192.168.1.20:54321", "http://localhost:5173", "", 401},
-		{"forwarded peer", "127.0.0.1:54321", "http://localhost:5173", "192.168.1.20", 401},
+		{"remote peer", "192.168.1.20:54321", "http://localhost:5173", "", 200},
+		{"forwarded peer", "127.0.0.1:54321", "http://localhost:5173", "192.168.1.20", 200},
 		{"cross origin", "127.0.0.1:54321", "https://attacker.example", "", 403},
 		{"missing origin", "127.0.0.1:54321", "", "", 403},
 	} {

@@ -35,14 +35,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	token := os.Getenv("CODEX_WEB_TOKEN")
-	if token == "" {
-		token = randomID()
-		log.Printf("CouchControl terminal access token: %s", token)
-	}
-	if len(token) < 32 {
-		log.Fatal("CODEX_WEB_TOKEN must be at least 32 characters")
-	}
+	token := randomID()
 	binary := os.Getenv("CODEX_WEB_BINARY")
 	if binary == "" {
 		binary = "codex"
@@ -72,7 +65,7 @@ func main() {
 	}
 	cm := &manager{db: claudeDB, binary: claudeBinary, cwd: workspace, provider: "claude", active: map[string]*process{}}
 	s := &server{manager: m, token: token, origins: allowed, hosts: hosts,
-		claude: &server{manager: cm, provider: "claude", token: token, origins: allowed, hosts: hosts}}
+		claude: &server{manager: cm, provider: "claude", token: randomID(), origins: allowed, hosts: hosts}}
 
 	httpServer := &http.Server{Addr: *listen, Handler: s.handler(*staticDir), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	defer s.browser.Close()

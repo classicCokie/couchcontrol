@@ -126,3 +126,56 @@ func TestClaudeIsolationAndTerminal(t *testing.T) {
 		t.Fatal("closing Claude affected Codex")
 	}
 }
+
+func TestAutomaticConnectionForBothApps(t *testing.T) {
+	root, _ := testServer(t)
+	claude, _ := testServer(t)
+	claude.provider = "claude"
+	claude.token = strings.Repeat("b", 64)
+	root.claude = claude
+	root.hosts["couch.example"] = true
+	root.origins["https://couch.example"] = true
+	handler := root.handler("")
+	defer root.browser.Close()
+	for _, app := range []string{"codex", "claude"} {
+		t.Run(app, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "https://couch.example/api/"+app+"/auth", strings.NewReader(`{}`))
+			r.RemoteAddr = "192.168.1.20:54321"
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Origin", "https://couch.example")
+			r.Header.Set("X-Forwarded-For", "192.168.1.20")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != 200 {
+				t.Fatalf("automatic connection: %d %s", w.Code, w.Body)
+			}
+			cookies := w.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Name != app+"_access" || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteStrictMode {
+				t.Fatalf("invalid cookie: %+v", cookies)
+			}
+			for _, target := range []string{"codex", "claude"} {
+				r = httptest.NewRequest("GET", "https://couch.example/api/"+target+"/sessions", nil)
+				r.AddCookie(&http.Cookie{Name: target + "_access", Value: cookies[0].Value})
+				w = httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				expected := 401
+				if target == app {
+					expected = 200
+				}
+				if w.Code != expected {
+					t.Fatalf("%s cookie on %s: %d", app, target, w.Code)
+				}
+			}
+			for _, origin := range []string{"", "https://evil.example"} {
+				r = httptest.NewRequest("POST", "https://couch.example/api/"+app+"/auth", strings.NewReader(`{}`))
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("Origin", origin)
+				w = httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				if w.Code != 403 {
+					t.Fatalf("accepted origin %q: %d", origin, w.Code)
+				}
+			}
+		})
+	}
+}

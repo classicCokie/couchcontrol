@@ -61,7 +61,6 @@ Run `go run . -help` for all flags. Defaults assume the working directory is
 | `-static` | `../../frontend/dist` | Frontend build served by Go; empty disables |
 | `-origins` | localhost / 127.0.0.1 on 8787, 5173, 4173 | Exact permitted browser origins and HTTP hosts |
 | `CODEX_WEB_BINARY` | `codex` on `PATH` | Installed CLI executable; arguments cannot be supplied here |
-| `CODEX_WEB_TOKEN` | Random token printed at startup | Optional stable access token, at least 32 characters |
 
 For a single server, run `npm run build` in `frontend`, then start the Go service
 and open <http://127.0.0.1:8787>. Run only one backend per database.
@@ -71,11 +70,12 @@ reverse proxy. Set `-listen` and `-origins` explicitly for the desired address,
 for example `-listen 0.0.0.0:8787 -origins http://192.168.1.50:8787` on a trusted
 LAN. For internet access, use HTTPS and proxy WebSocket upgrades while preserving
 the browser's Host and Origin. Access to this app grants control of the host's
-Codex account and workspace; the token is for the host operator, not a multiuser
-permission system. A remote browser must first establish its authentication
-cookie using `POST /api/codex/auth` with JSON `{"token":"<host access token>"}`
-from an allowed origin. Local browsers establish their cookie automatically;
-forwarded requests do not qualify for automatic authentication.
+CLI accounts and workspace. Both apps automatically establish their own HttpOnly
+cookie using `POST /api/codex/auth` or `POST /api/claude/auth` with JSON `{}`.
+No access token needs to be entered. Any client that can reach the service and
+use an allowed Host and Origin can connect, so restrict deployment to trusted
+users through a private network or an authenticated reverse proxy.
+
 
 ## Persistence and lifecycle
 
@@ -106,9 +106,9 @@ forwarded requests do not qualify for automatic authentication.
   `--sandbox workspace-write`, and `--ask-for-approval on-request`.
 - Authentication uses an HttpOnly, SameSite=Strict cookie scoped to `/api/codex`.
   Host validation and exact Origin checks protect API writes and WebSockets.
-  Token-free cookie setup requires a loopback peer and loopback browser origin,
-  with no forwarding headers. Remote clients still require a token.
-  A generated token changes on each restart; a configured token stays stable.
+  Cookie setup is automatic for local and remote browsers. Each app has its own
+  internal cookie secret, regenerated on restart; the browser reconnects automatically.
+  `CODEX_WEB_TOKEN` is no longer used to configure access.
   `CODEX_WEB_*` and `CLAUDE_WEB_*` environment variables are omitted from the CLI child environment.
 
 ## Verify
