@@ -62,8 +62,8 @@
     const target = voiceTarget
     voiceTarget = null
     await tick()
-    if (target && codexOpen && target.app === codexApp && !voiceOpen && !folderRequest && !closing) {
-      codexApp.pasteIfEmpty(text, target.input)
+    if (target && (codexOpen || browserOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
+      activePane.pasteIfEmpty(text, target.input)
     }
   }
 
@@ -93,6 +93,12 @@
   $: activeDefinition = availableApps.find(app => app.id === activeApp?.type)
   $: codexOpen = appOpen && !pickerOpen && activeDefinition?.id === 'codex'
   $: settingsOpen = appOpen && !pickerOpen && activeDefinition?.id === 'settings'
+  $: browserOpen = appOpen && !pickerOpen && activeDefinition?.id === 'browser'
+
+  function updateApp(id, changes) {
+    const update = app => app?.id === id ? { ...app, ...changes } : app
+    state = { ...state, apps: state.apps.map(entry => entry.type === 'group' ? { ...entry, apps: entry.apps.map(update) } : update(entry)) }
+  }
 
   const selectedCard = () => cardsViewport?.querySelectorAll('.card')[state.selected]
 
@@ -137,7 +143,7 @@
 
   async function act(action) {
     if (action === 'record-start' && !voiceOpen) {
-      voiceTarget = codexOpen && !folderRequest ? { app: codexApp, input: codexApp?.captureEmptyInput() } : null
+      voiceTarget = (codexOpen || browserOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
     }
     if (voiceOverlay?.handleAction(action)) return
     if (folderRequest) { folderPicker?.handleAction(action); return }
@@ -166,11 +172,12 @@
       return
     }
     if (action === 'paste') {
-      if (codexOpen) codexApp?.pasteClipboard()
+      if (codexOpen || browserOpen) activePane?.pasteClipboard()
       else if (state.view === 'menu' && activeEntry) { closeError = ''; closeRequest = activeEntry }
       return
     }
     if (settingsOpen && settingsApp?.control(action)) return
+    if (browserOpen && activePane?.control(action)) return
     if (appOpen && !pickerOpen && (action === 'up' || action === 'down')) {
       activePane?.scroll(action)
       return
@@ -226,6 +233,10 @@
     if (appOpen && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       event.preventDefault()
       if (!event.repeat) act(event.key === 'ArrowLeft' ? 'tile-left' : 'tile-right')
+      return
+    }
+    if (browserOpen) {
+      if (event.key === 'Escape') { event.preventDefault(); act('back') }
       return
     }
     if (settingsOpen) {
@@ -364,7 +375,7 @@
           <section class="app-pane" bind:this={paneElements[app.id]} class:focused={activeApp?.id === app.id && !pickerOpen} style:grid-column={side + 1} style:--app-glow={definition.glow} style:--app-base={definition.base} style:--app-ink={definition.ink} aria-label={app.title}>
             {#if grouped}<button class="pane-heading" aria-pressed={activeApp?.id === app.id && !pickerOpen} disabled={pickerOpen} onclick={() => act(side === 0 ? 'tile-left' : 'tile-right')}><kbd>{side === 0 ? 'L1' : 'R1'}</kbd><span>{app.title}</span><small>{activeApp?.id === app.id && !pickerOpen ? 'Focused' : 'Switch focus'}</small></button>{/if}
             <div class="pane-body">
-              <AppPane bind:this={panes[app.id]} {app} {definition} tiled={grouped} active={activeApp?.id === app.id && !pickerOpen} canPaste={() => appOpen && activeApp?.id === app.id && !pickerOpen && !voiceOpen && !folderRequest && !closeRequest && !closing} onback={() => act('back')} />
+              <AppPane bind:this={panes[app.id]} {app} {definition} tiled={grouped} active={activeApp?.id === app.id && !pickerOpen} canPaste={() => appOpen && activeApp?.id === app.id && !pickerOpen && !voiceOpen && !folderRequest && !closeRequest && !closing} onupdate={changes => updateApp(app.id, changes)} onback={() => act('back')} />
             </div>
           </section>
         {/each}
@@ -383,7 +394,7 @@
           </section>
         {/if}
       </div>
-      {#if !grouped}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
+      {#if !grouped && !browserOpen}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
     </div>
   {/if}
 

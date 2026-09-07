@@ -49,6 +49,7 @@ func main() {
 	m := &manager{db: db, binary: binary, cwd: workspace, active: map[string]*process{}}
 	s := &server{manager: m, token: token, origins: allowed, hosts: hosts}
 	httpServer := &http.Server{Addr: *listen, Handler: s.handler(*staticDir), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	defer s.browser.Close()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	failure := make(chan error, 1)

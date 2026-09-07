@@ -2,6 +2,20 @@
 
 A Svelte app switcher with keyboard and gamepad controls.
 
+The **Browser** app has a single natural-language command bar. Hold R2, speak,
+release, and press Cross/A to paste the transcript into an empty command bar.
+Press Cross/A again to run it. Try “Open localhost on port three thousand”,
+“Show it at phone width”, “Reload”, or “Go back”. Square/X pastes clipboard text;
+D-pad/left-stick Left clears the draft so you can record a replacement.
+The saved OpenAI key powers both transcription and the small command model.
+Each card remembers its last URL. A separate Chrome/Chromium process on the
+backend renders the page and sends a live view to Browser, including sites that
+block iframe embedding. Say “Click the search field”, “Type hello”, “Press Enter”,
+or “Scroll down” to interact. Chrome must be installed on the backend host;
+`COUCHCONTROL_CHROME` can specify its executable. Localhost now refers to that
+backend machine. See the [Browser app notes](frontend/src/apps/browser/README.md)
+for session lifetime and current interaction limits.
+
 The **Codex** app opens the local Codex CLI through a web terminal, backed by a
 separate Go service and SQLite session history.
 
@@ -35,7 +49,7 @@ Codex must be installed and signed in on the host.
 See [the Codex README](backend/codex/README.md) for requirements, configuration,
 session persistence, hosting, and verification commands.
 
-Open **Settings → API keys** and save your OpenAI API key under **Whisper API key**
+Open **Settings → API keys** and save your OpenAI API key under **OpenAI API key**
 to enable voice transcription. In any app:
 
 - Hold **R2** to record from the computer microphone and see a live waveform.

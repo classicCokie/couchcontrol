@@ -12,8 +12,8 @@ lives at `backend/go.mod`. Frontend code is grouped in `src/features/voice` and
 Settings is installed on the app shelf by default. Its sidebar contains the
 **API keys** category. Navigate with arrow keys or the joystick and select with
 Cross/A or Enter. Left returns to categories; keyboard left/right inside the API
-key field retain their editing behavior. Paste an OpenAI API key into **Whisper API
-key** and save. The setting survives backend restarts in the SQLite `settings`
+key field retain their editing behavior. Paste an OpenAI API key into **OpenAI API
+key** and save. The same key also powers Browser command interpretation. The setting survives backend restarts in the SQLite `settings`
 table. The existing database is owner-readable only. GET responses reveal only
 whether a key is configured; they never return the key. An empty key removes it.
 
@@ -105,6 +105,11 @@ Codex requests a folder only when starting a new process and persists the choice
 with its session in SQLite. Returning to a running session reuses its directory.
 
 Voice capture exposes a generic successful-copy callback. The main app routes
-it to the active Codex terminal only if its recognized empty composer has not
-changed since R2 opened. Clipboard success closes the modal before pasting;
-pasting never submits. Other apps and existing Codex input keep normal copy behavior.
+it to the active Codex terminal or Browser command bar only if its empty composer
+has not changed since R2 opened. Clipboard success closes the modal before pasting;
+pasting never submits. Other apps and existing drafts keep normal copy behavior.
+
+The host also registers `POST /api/browser/commands` from the independent
+`backend/browser` package, injecting `OpenAIKey` as a server-side credential
+provider. This endpoint shares Host/Origin protection without requiring a Codex
+session. See [Browser documentation](../../frontend/src/apps/browser/README.md).

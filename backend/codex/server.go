@@ -1,6 +1,7 @@
 package main
 
 import (
+	"couchcontrol/backend/browser"
 	"couchcontrol/backend/platform"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -16,6 +17,7 @@ import (
 )
 
 type server struct {
+	browser *browser.Engine
 	manager *manager
 	token   string
 	origins map[string]bool
@@ -67,7 +69,12 @@ func localBrowser(r *http.Request) bool {
 
 func (s *server) handler(staticDir string) http.Handler {
 	mux := http.NewServeMux()
-	platform.New(s.manager.db, nil).Register(mux)
+	shared := platform.New(s.manager.db, nil)
+	shared.Register(mux)
+	s.browser = browser.NewEngine()
+	browserHandler := browser.New(shared.OpenAIKey, nil)
+	browserHandler.Engine = s.browser
+	browserHandler.Register(mux)
 	{
 		path := "/api/codex/auth"
 		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {

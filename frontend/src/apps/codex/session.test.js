@@ -56,6 +56,28 @@ test('failed startup is retryable without caching a rejected launch', async () =
   assert.equal((await open('Codex 1')).id, 'live')
 })
 
+test('missing or stale access can be retried after signing in without starting duplicate sessions', async () => {
+  for (const failurePath of ['/auth', '/sessions']) {
+    let authenticated = false, folderRequests = 0, launches = 0
+    const denied = Object.assign(new Error('Access token is incorrect.'), { status: 401 })
+    const open = createSessionOpener(async (path, method = 'GET') => {
+      if (path === '/auth' && method === 'GET') return { authenticated: authenticated || failurePath === '/sessions' }
+      if (!authenticated) throw denied
+      if (path === '/sessions' && method === 'GET') return { sessions: [] }
+      launches++
+      return { id: 'new', status: 'running' }
+    })
+    const chooseFolder = async () => { folderRequests++; return '/chosen/folder' }
+    await assert.rejects(open('Codex 1', chooseFolder), { status: 401 })
+    assert.equal(folderRequests, 0)
+    assert.equal(launches, 0)
+    authenticated = true
+    assert.equal((await open('Codex 1', chooseFolder)).id, 'new')
+    assert.equal(folderRequests, 1)
+    assert.equal(launches, 1)
+  }
+})
+
 test('canceling folder selection creates no session and permits a later choice', async () => {
   const { open, sessions } = host()
   assert.equal(await open('Codex 1', async () => null), null)

@@ -2,30 +2,35 @@
   import AppIcon from '../../lib/AppIcon.svelte'
   import CodexApp from '../../apps/codex/CodexApp.svelte'
   import SettingsApp from '../../apps/settings/SettingsApp.svelte'
+  import BrowserApp from '../../apps/browser/BrowserApp.svelte'
   export let app
   export let definition
   export let active = true
   export let tiled = false
   export let canPaste = () => true
   export let onback = () => {}
-  let codex, settings, content, back
+  export let onupdate = () => {}
+  let codex, settings, browser, content, back
   export function focusNavigation() {
     if (codex) codex.focusInput()
     else if (settings) settings.focusNavigation()
+    else if (browser) browser.focusNavigation()
     else back?.focus({ preventScroll: true })
   }
-  export function control(action) { return codex?.control(action) || settings?.control(action) }
+  export function control(action) { return codex?.control(action) || settings?.control(action) || browser?.control(action) }
   export function handleKeydown(event) { return codex?.handleKeydown(event) || settings?.handleKeydown(event) }
-  export function pressEnter() { codex?.pressEnter() }
-  export function pasteClipboard() { return codex?.pasteClipboard() }
-  export function captureEmptyInput() { return codex?.captureEmptyInput() }
-  export function pasteIfEmpty(text, snapshot) { return codex?.pasteIfEmpty(text, snapshot) }
+  export function pressEnter() { return codex?.pressEnter() || browser?.pressEnter() }
+  export function pasteClipboard() { return codex?.pasteClipboard() || browser?.pasteClipboard() }
+  export function captureEmptyInput() { return codex ? codex.captureEmptyInput() : browser?.captureEmptyInput() }
+  export function pasteIfEmpty(text, snapshot) { return codex ? codex.pasteIfEmpty(text, snapshot) : browser?.pasteIfEmpty(text, snapshot) }
   export function scroll(action) { content?.scrollBy({ top: action === 'up' ? -100 : 100, behavior: 'instant' }) }
 </script>
 
 <div class="pane-content" class:tiled bind:this={content} inert={!active}>
   {#if definition.id === 'codex'}
     <CodexApp bind:this={codex} title={app.title} {active} {canPaste} oncancel={onback} />
+  {:else if definition.id === 'browser'}
+    <BrowserApp bind:this={browser} title={app.title} initialUrl={app.browserUrl || ''} onnavigate={browserUrl => onupdate({ browserUrl })} {active} {canPaste} {onback} />
   {:else}
     <span class="surface-mark" aria-hidden="true"><AppIcon type={definition.id} /></span>
     <button bind:this={back} class="back-button" onclick={onback}><span aria-hidden="true">←</span> Your apps <kbd>esc</kbd></button>

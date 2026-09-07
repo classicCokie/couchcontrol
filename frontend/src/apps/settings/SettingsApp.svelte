@@ -102,8 +102,8 @@
         <p class="section-intro">Manage the services connected to CouchControl.</p>
         <form onsubmit={event => { event.preventDefault(); if (!busy && key.trim()) save(key) }}>
           <div class="setting-heading"><h3>OpenAI · Whisper</h3><span class:enabled={configured}>{configured ? 'Enabled' : 'Not configured'}</span></div>
-          <p>Hold R2 to record your voice in any app. Release it to transcribe with Whisper.</p>
-          <label for="whisper-key">Whisper API key</label>
+          <p>Used for Whisper transcription and natural-language Browser commands.</p>
+          <label for="whisper-key">OpenAI API key</label>
           <input id="whisper-key" type="password" bind:value={key} autocomplete="off" spellcheck="false" placeholder={configured ? 'Enter a new key to replace the saved key' : 'Paste your OpenAI API key'} maxlength="512" />
           <small>Your key is saved on this machine and is never sent back to the browser.</small>
           <div class="actions"><button class="save" disabled={busy || !key.trim()}>{busy && key ? 'Saving…' : 'Save key'}</button>{#if configured}<button type="button" disabled={busy} onclick={() => save('')}>Remove key</button>{/if}</div>

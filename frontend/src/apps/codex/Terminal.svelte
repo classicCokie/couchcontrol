@@ -10,6 +10,7 @@
   import { isTerminalReport, createInputClearer } from './input.js'
 
   export let oncancel = () => {}
+  export let onauthrequired = () => {}
   export let active = true
   export let openSession
   export let canPaste = () => true
@@ -158,6 +159,7 @@
         connect()
       } catch (error) {
         if (disposed) return
+        if (error.status === 401) { onauthrequired(); return }
         // Startup failures are terminal output, not another screen to navigate.
         term.reset()
         term.writeln(String(error.message).replace(/[\x00-\x1f\x7f]/g, ' '))

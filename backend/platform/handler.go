@@ -58,6 +58,9 @@ func (h *Handler) key() (string, error) {
 	}
 	return key, err
 }
+
+// OpenAIKey provides the shared credential to server-side app adapters only.
+func (h *Handler) OpenAIKey() (string, error) { return h.key() }
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 	key, err := h.key()
 	if err != nil {
