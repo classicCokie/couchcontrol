@@ -78,6 +78,16 @@
   let surfaceAnimation
   let motionId = 0
   let controllerConnected = false
+  let controllerStatus = ''
+  const controllerHints = {
+    insecure: 'Controller access needs HTTPS or localhost.',
+    unavailable: 'This browser does not expose controller input.',
+    blocked: 'Browser blocked controller access. Check site permissions.',
+    unsupported: 'Controller detected without a supported button mapping.',
+    waiting: 'Controller: press a button to connect.',
+    unfocused: 'Click or tap this window to enable controller input.',
+    release: 'Release controller buttons and center both sticks.',
+  }
   let reducedMotion = false
   $: appCatalog = allApps(state).some(app => app.type === 'settings') ? addableApps : availableApps
   $: if (storageReady) saveSwitcher(state, shelfStorage)
@@ -302,7 +312,7 @@
       surfaceAnimation?.finish()
     })
     observer.observe(cardsViewport)
-    const stopGamepad = startGamepadControls({ onAction: act, onConnection: connected => { controllerConnected = connected } })
+    const stopGamepad = startGamepadControls({ onAction: act, onConnection: connected => { controllerConnected = connected }, onStatus: status => { controllerStatus = status } })
     return () => {
       finishFolder(null)
       stopGamepad()
@@ -405,6 +415,7 @@
   <div class="input-hint" aria-live="polite">
     {#if appOpen && grouped}<span><kbd>L1</kbd> Left · <kbd>R1</kbd> Right</span><span>Alt + ← / →</span>{/if}
     {#if appOpen && grouped}<span>△ / Y · {activeApp ? 'Close focused app' : 'Close empty side'}</span>{/if}
+    {#if controllerHints[controllerStatus]}<span>{controllerHints[controllerStatus]}</span>{/if}
     {#if controllerConnected}
       <span class="controller-indicator" aria-hidden="true"></span>
       <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>

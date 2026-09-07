@@ -40,6 +40,44 @@ func New(dir string, key func() (string, error)) *Handler {
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/notes", h.list)
 	mux.HandleFunc("POST /api/notes/{id}/edit", h.edit)
+	mux.HandleFunc("DELETE /api/notes/{id}", h.delete)
+}
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var input struct {
+		Revision string `json:"revision"`
+	}
+	if !validID.MatchString(id) || json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&input) != nil || input.Revision == "" {
+		fail(w, 400, "Send the saved note revision.")
+		return
+	}
+	if !h.mu.TryLock() {
+		fail(w, 409, "Another note is being saved. Try again shortly.")
+		return
+	}
+	defer h.mu.Unlock()
+	note, err := h.read(id)
+	if os.IsNotExist(err) {
+		fail(w, 404, "This note no longer exists. Reload notes.")
+		return
+	}
+	if err != nil {
+		fail(w, 500, "Could not read this note.")
+		return
+	}
+	if note.Revision != input.Revision {
+		fail(w, 409, "This note changed elsewhere. Reload notes before deleting it.")
+		return
+	}
+	if err := os.RemoveAll(filepath.Join(h.Dir, ".history", id)); err != nil {
+		fail(w, 500, "Could not delete this note's history. Try again.")
+		return
+	}
+	if err := os.Remove(filepath.Join(h.Dir, id+".md")); err != nil {
+		fail(w, 500, "Could not delete this note. Try again.")
+		return
+	}
+	reply(w, 200, map[string]bool{"deleted": true})
 }
 func reply(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")

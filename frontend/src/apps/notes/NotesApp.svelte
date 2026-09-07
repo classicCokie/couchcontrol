@@ -7,7 +7,8 @@
   export let active = true
   export let canPaste = () => true
   let notes = [], current = blank(), busy = false, loading = true, error = '', pending = ''
-  let sidebar, canvas, content
+  let sidebar, canvas, content, deleteDialog
+  let deleteTarget = null, deleting = false
   let marking = false
   $: if (!active) marking = false
   let sidebarOpen = false, choice = 0, lines = [], cursor = -1, markedLines = []
@@ -38,7 +39,7 @@
   }
   function closeSidebar() { sidebarOpen = false; focusNavigation() }
   function select(note) {
-    if (busy || loading || pending) return
+    if (busy || loading || pending || deleteTarget) return
     marking = false
     current = note; error = ''; cursor = -1; markedLines = []
     if (canvas) canvas.scrollTop = 0
@@ -46,7 +47,7 @@
   }
   function chooseNote() { select(choice === 0 ? blank() : notes[choice - 1]) }
   async function navigateNotes(direction) {
-    if (busy || loading || pending) return
+    if (busy || loading || pending || deleteTarget) return
     if (!sidebarOpen) {
       choice = Math.max(0, notes.findIndex(note => note.id === current.id) + 1)
       if (choice === 0 && notes.length) choice = 1
@@ -59,20 +60,52 @@
     button?.scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'instant' : 'smooth' })
   }
   export function focusNavigation() { canvas?.focus({ preventScroll: true }) }
-  export function captureEmptyInput() { marking = false; return !busy && !loading && !pending ? { id: current.id, revision: current.revision, selectedLines: markedLines.map(index => ({ line: index + 1, text: renderedLineText(content, lines[index]) })) } : null }
+  export function captureEmptyInput() { marking = false; return !busy && !loading && !pending && !deleteTarget ? { id: current.id, revision: current.revision, selectedLines: markedLines.map(index => ({ line: index + 1, text: renderedLineText(content, lines[index]) })) } : null }
   export function pasteIfEmpty(text, snapshot) {
-    if (!snapshot || snapshot.id !== current.id || snapshot.revision !== current.revision || busy || pending || !text.trim()) return false
+    if (!snapshot || snapshot.id !== current.id || snapshot.revision !== current.revision || busy || pending || deleteTarget || !text.trim()) return false
     pending = text
     pendingSelection = snapshot.selectedLines || []
     compose()
     return true
   }
+  async function requestDelete() {
+    if (busy || loading || pending || deleteTarget || choice === 0) return
+    deleteTarget = notes[choice - 1]
+    if (!deleteTarget) return
+    error = ''
+    await tick()
+    deleteDialog.showModal()
+    deleteDialog.querySelector('button')?.focus()
+  }
+  async function dismissDelete() {
+    if (deleting) return
+    deleteDialog.close()
+    deleteTarget = null
+    await tick()
+    sidebar?.querySelectorAll('[data-choice]')[choice]?.focus({ preventScroll: true })
+  }
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return
+    const target = deleteTarget
+    deleting = true
+    try {
+      await platformRequest('/notes/' + target.id, { method: 'DELETE', body: { revision: target.revision } })
+      notes = notes.filter(note => note.id !== target.id)
+      choice = Math.min(choice, notes.length)
+      if (current.id === target.id) {
+        current = blank(); cursor = -1; markedLines = []; marking = false
+        if (canvas) canvas.scrollTop = 0
+      }
+    } catch (e) { error = e.message }
+    finally { deleting = false; dismissDelete() }
+  }
   export async function pasteClipboard() {
+    if (sidebarOpen) { requestDelete(); return }
     const snapshot = captureEmptyInput()
     if (!snapshot || !canPaste()) return
     try {
       const text = await navigator.clipboard.readText()
-      if (canPaste()) pasteIfEmpty(text, snapshot)
+      if (canPaste() && !sidebarOpen) pasteIfEmpty(text, snapshot)
     } catch { error = 'Clipboard access was blocked. Use R2 to dictate your instruction.' }
   }
   async function retry() { await refresh(); if (pending && !error) compose() }
@@ -104,6 +137,11 @@
     else if (top + height > canvas.scrollTop + canvas.clientHeight - margin) canvas.scrollTo({ top: top + height - canvas.clientHeight + margin, behavior: reducedMotion ? 'instant' : 'smooth' })
   }
   export function control(action) {
+    if (deleteTarget) {
+      if (action === 'confirm') confirmDelete()
+      else if (action === 'back') dismissDelete()
+      return true
+    }
     if (action === 'mark-end' || action === 'mark-cancel') { marking = false; return true }
     if (action === 'mark-start') {
       if (!sidebarOpen && !busy && !loading && !pending && lines.length) {
@@ -141,6 +179,14 @@
 </script>
 
 <div class="notes-app">
+  <dialog bind:this={deleteDialog} class="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-note-title" oncancel={(event) => { event.preventDefault(); dismissDelete() }}>
+    <h2 id="delete-title">Do you really want to delete the note?</h2>
+    <p id="delete-note-title">{deleteTarget?.title || ''}</p>
+    <div class="delete-actions">
+      <button disabled={deleting} onclick={dismissDelete}>○ Cancel</button>
+      <button disabled={deleting} onclick={confirmDelete}>{deleting ? 'Deleting…' : '× Delete note'}</button>
+    </div>
+  </dialog>
   <aside bind:this={sidebar} class:open={sidebarOpen} inert={!sidebarOpen} aria-hidden={!sidebarOpen} aria-label="Notes">
     <div class="sidebar-heading"><span>Notes</span><span class="count">{notes.length}</span></div>
     <button data-choice class="new-note" class:highlighted={choice === 0} disabled={busy || loading || !!pending} onclick={() => select(blank())}>＋ New note <small>Start</small></button>
@@ -152,7 +198,7 @@
       {/each}
       {#if !notes.length}<p class="muted">{loading ? 'Loading notes…' : 'Your notes will appear here.'}</p>{/if}
     </div>
-    <div class="controls">Left stick · Browse<br />× Open &nbsp; ○ Dismiss</div>
+    <div class="controls">Left stick · Browse<br />× Open &nbsp; □ Delete &nbsp; ○ Dismiss</div>
   </aside>
   <section bind:this={canvas} class="canvas" aria-label="Note preview" aria-busy={busy} tabindex="-1">
     <article class="markdown" class:composing={busy}>
@@ -176,6 +222,11 @@
 </div>
 
 <style>
+  .delete-dialog { width: min(440px, 85vw); padding: 28px; border: 1px solid #d4c3ab; border-radius: 14px; background: #f6f3ec; color: #302e29; box-shadow: 0 16px 60px #302e2933; }
+  .delete-dialog::backdrop { background: #302e2966; }
+  .delete-dialog h2 { margin: 0 0 16px; font: 24px/1.3 Georgia, serif; }
+  .delete-dialog p { overflow-wrap: anywhere; }
+  .delete-actions { display: flex; justify-content: flex-end; gap: 12px; }
   .notes-app { position: absolute; inset: 0; display: flex; background: #f6f3ec; color: #302e29; }
   aside { position: absolute; inset: 0 auto 0 0; z-index: 5; transform: translateX(-105%); visibility: hidden; transition: transform 320ms cubic-bezier(.22, 1, .36, 1), visibility 320ms; box-shadow: 18px 0 60px #302e2914; display: flex; flex-direction: column; width: clamp(180px, 24%, 280px); flex-shrink: 0; padding: 28px 18px 24px; background: #eae6dd; border-right: 1px solid #dcd6ca; gap: 12px; min-height: 0; }
   aside.open { transform: translateX(0); visibility: visible; }

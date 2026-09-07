@@ -256,3 +256,62 @@ func TestUnreadableHistoryPreventsEdit(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestDeleteNote(t *testing.T) {
+	h, mux := setup(t)
+	var note Note
+	json.Unmarshal(edit(mux, "delete-me", "").Body.Bytes(), &note)
+	edit(mux, "keep-me", "")
+	history := h.historyPath(note.ID, note.Revision)
+	if err := os.MkdirAll(filepath.Dir(history), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMarkdown(history, "old text"); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(id, rev string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(map[string]string{"revision": rev})
+		mux.ServeHTTP(w, httptest.NewRequest("DELETE", "/api/notes/"+id, strings.NewReader(string(body))))
+		return w
+	}
+	for _, rev := range []string{"", "stale"} {
+		w := remove(note.ID, rev)
+		if w.Code != 400 && w.Code != 409 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		if _, err := h.read(note.ID); err != nil {
+			t.Fatal("rejected deletion removed note", err)
+		}
+		if _, err := os.Stat(history); err != nil {
+			t.Fatal("rejected deletion removed history", err)
+		}
+	}
+	h.mu.Lock()
+	w := remove(note.ID, note.Revision)
+	h.mu.Unlock()
+	if w.Code != 409 {
+		t.Fatal("delete accepted during edit", w.Code)
+	}
+	if w := remove("bad.name", note.Revision); w.Code != 400 {
+		t.Fatal(w.Code)
+	}
+	if w := remove(note.ID, note.Revision); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if _, err := h.read(note.ID); !os.IsNotExist(err) {
+		t.Fatal("note remains", err)
+	}
+	if _, err := os.Stat(filepath.Dir(history)); !os.IsNotExist(err) {
+		t.Fatal("history remains", err)
+	}
+	if _, err := h.read("keep-me"); err != nil {
+		t.Fatal("unselected note removed", err)
+	}
+	if w := remove(note.ID, note.Revision); w.Code != 404 {
+		t.Fatal(w.Code)
+	}
+	if w := edit(mux, note.ID, note.Revision); w.Code != 409 {
+		t.Fatal("stale edit recreated deleted note", w.Code)
+	}
+}

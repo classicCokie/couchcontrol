@@ -74,9 +74,13 @@ export function createGamepadReader() {
   }
 }
 
-export function startGamepadControls({ onAction, onConnection, win = window, doc = document, nav = navigator }) {
-  if (typeof nav.getGamepads !== 'function') return () => {}
-  let request
+export function startGamepadControls({ onAction, onConnection, onStatus = () => {}, win = window, doc = document, nav = navigator }) {
+  if (typeof nav.getGamepads !== 'function') {
+    onStatus(win.isSecureContext === false ? 'insecure' : 'unavailable')
+    return () => {}
+  }
+  let request, stopped = false, status
+  const report = next => { if (status !== next) { status = next; onStatus(next) } }
   let identity = null
   let reader = createGamepadReader()
   let armed = false
@@ -88,12 +92,37 @@ export function startGamepadControls({ onAction, onConnection, win = window, doc
     triggerHeld = false; markHeld = false
   }
 
+  function reset() {
+    cancelTrigger()
+    armed = false
+    reader = createGamepadReader()
+  }
+  function resume() {
+    if (stopped) return
+    reset()
+    win.cancelAnimationFrame(request)
+    request = win.requestAnimationFrame(poll)
+  }
+  // A suspended window may receive no animation frame while it is hidden.
+  const listeners = [
+    [win, 'blur', reset], [win, 'focus', resume],
+    [win, 'pagehide', reset], [win, 'pageshow', resume],
+    [doc, 'visibilitychange', resume],
+    [win, 'gamepadconnected', resume], [win, 'gamepaddisconnected', resume],
+  ]
+  for (const [target, type, listener] of listeners) target.addEventListener(type, listener)
+
   function poll(now) {
+    if (stopped) return
+    // Keep polling even if access temporarily fails during launch or resume.
+    request = win.requestAnimationFrame(poll)
     let pads
     try { pads = Array.from(nav.getGamepads()) } catch {
       // Browsers may disable controller access through their permissions policy.
-      cancelTrigger()
-      onConnection(false)
+      reset()
+      identity = null
+      if (connected) { connected = false; onConnection(false) }
+      report(win.isSecureContext === false ? 'insecure' : 'blocked')
       return
     }
     const pad = pads.find(pad => pad?.connected && pad.mapping === 'standard')
@@ -109,13 +138,13 @@ export function startGamepadControls({ onAction, onConnection, win = window, doc
       onConnection(connected)
     }
     if (!pad || doc.hidden || !doc.hasFocus()) {
-      cancelTrigger()
-      armed = false
-      reader = createGamepadReader()
+      reset()
+      report(!pad ? (pads.some(pad => pad?.connected) ? 'unsupported' : 'waiting') : 'unfocused')
     } else if (!armed) {
       // Require release after connection/refocus so a held button cannot open a title.
       armed = !pad.buttons.some(button => button.pressed)
-        && pad.axes.every(axis => Math.abs(axis) < 0.3)
+        && pad.axes.slice(0, 4).every(axis => Math.abs(axis) < 0.3)
+      report(armed ? 'ready' : 'release')
     } else {
       for (const action of reader(pad, now)) {
         if (action === 'mark-start') markHeld = true
@@ -125,9 +154,13 @@ export function startGamepadControls({ onAction, onConnection, win = window, doc
         onAction(action)
       }
     }
-    request = win.requestAnimationFrame(poll)
   }
 
   request = win.requestAnimationFrame(poll)
-  return () => { cancelTrigger(); win.cancelAnimationFrame(request) }
+  return () => {
+    stopped = true
+    cancelTrigger()
+    win.cancelAnimationFrame(request)
+    for (const [target, type, listener] of listeners) target.removeEventListener(type, listener)
+  }
 }

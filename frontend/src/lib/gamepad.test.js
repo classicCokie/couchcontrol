@@ -44,16 +44,22 @@ test('face buttons fire only on a new press; Back wins simultaneous presses', ()
 })
 
 function harness() {
-  let pending, cancelled = false
-  const state = { pads: [], focused: true, hidden: false, actions: [], connections: [] }
+  let pending, nextId = 0
+  const win = new EventTarget(), doc = new EventTarget()
+  const state = { pads: [], focused: true, hidden: false, actions: [], connections: [], statuses: [], error: null }
+  Object.assign(win, {
+    requestAnimationFrame(callback) { pending = callback; return ++nextId },
+    cancelAnimationFrame() { pending = undefined },
+  })
+  Object.defineProperty(doc, 'hidden', { get: () => state.hidden })
+  doc.hasFocus = () => state.focused
   const stop = startGamepadControls({
     onAction: action => state.actions.push(action),
     onConnection: connected => state.connections.push(connected),
-    win: { requestAnimationFrame(callback) { pending = callback; return 1 }, cancelAnimationFrame() { cancelled = true } },
-    doc: { get hidden() { return state.hidden }, hasFocus: () => state.focused },
-    nav: { getGamepads: () => state.pads },
+    onStatus: status => state.statuses.push(status), win, doc,
+    nav: { getGamepads: () => { if (state.error) throw state.error; return state.pads } },
   })
-  return { state, stop, step: (now = 0) => { if (!cancelled) pending(now) } }
+  return { state, stop, win, doc, step: (now = 0) => { const callback = pending; pending = undefined; callback?.(now) } }
 }
 
 test('connects in sparse slots, requires release, disconnects and cleans up', () => {
@@ -110,13 +116,64 @@ test('ignores background input and requires release on return', () => {
   assert.deepEqual(state.actions, ['confirm'])
 })
 
-test('unavailable or blocked APIs do not break the app', () => {
-  const options = { onAction() { assert.fail('Unexpected input') }, onConnection() {}, win: {}, doc: {}, nav: {} }
-  assert.doesNotThrow(() => startGamepadControls(options)())
-  options.nav.getGamepads = () => { throw new Error('SecurityError') }
-  options.win.requestAnimationFrame = callback => { callback(0); return 1 }
-  options.win.cancelAnimationFrame = () => {}
-  assert.doesNotThrow(() => startGamepadControls(options)())
+test('unavailable API reports why without breaking the app', () => {
+  for (const secure of [true, false]) {
+    const statuses = []
+    assert.doesNotThrow(() => startGamepadControls({
+      onAction() { assert.fail('Unexpected input') }, onConnection() {},
+      onStatus: status => statuses.push(status), win: { isSecureContext: secure }, doc: {}, nav: {},
+    })())
+    assert.deepEqual(statuses, [secure ? 'unavailable' : 'insecure'])
+  }
+})
+
+test('controller polling recovers after an API error and requires release', () => {
+  const { state, step } = harness(), pad = gamepad()
+  state.error = new Error('Temporarily unavailable')
+  step(); step()
+  assert.deepEqual(state.statuses, ['blocked'])
+  state.error = null; state.pads = [pad]; step()
+  pad.buttons[7].pressed = true; step()
+  state.error = new Error('Access interrupted'); step()
+  assert.deepEqual(state.actions, ['record-start', 'record-cancel'])
+  assert.deepEqual(state.connections, [true, false])
+  state.error = null; step()
+  assert.deepEqual(state.connections, [true, false, true])
+  assert.equal(state.statuses.at(-1), 'release')
+  pad.buttons[7].pressed = false; step()
+  pad.buttons[0].pressed = true; step()
+  assert.deepEqual(state.actions, ['record-start', 'record-cancel', 'confirm'])
+})
+
+test('suspension cancels held input without a frame and re-arms on return', () => {
+  for (const event of ['blur', 'pagehide', 'visibilitychange']) {
+    const { state, step, win, doc, stop } = harness(), pad = gamepad()
+    state.pads = [pad]; step()
+    pad.buttons[7].pressed = true; step()
+    pad.buttons[6].pressed = true; step()
+    const target = event === 'visibilitychange' ? doc : win
+    target.dispatchEvent(new Event(event))
+    assert.deepEqual(state.actions, ['record-start', 'mark-start', 'record-cancel', 'mark-cancel'])
+    // Browser resumes without having rendered any hidden/background frames.
+    win.dispatchEvent(new Event('pageshow')); win.dispatchEvent(new Event('focus'))
+    step()
+    pad.buttons[7].pressed = false; pad.buttons[6].pressed = false; step()
+    assert.equal(state.actions.length, 4)
+    pad.buttons[0].pressed = true; step()
+    assert.equal(state.actions.at(-1), 'confirm')
+    stop()
+    win.dispatchEvent(new Event('focus')); doc.dispatchEvent(new Event('visibilitychange'))
+    pad.buttons[1].pressed = true; step()
+    assert.equal(state.actions.length, 5)
+  }
+})
+
+test('unused extra axes do not prevent controller activation', () => {
+  const { state, step } = harness(), pad = gamepad()
+  pad.axes = [0, 0, 0, 0, -1, -1]
+  state.pads = [pad]; step()
+  pad.buttons[0].pressed = true; step()
+  assert.deepEqual(state.actions, ['confirm'])
 })
 
 test('R2 emits one press and release with analog hysteresis', () => {
