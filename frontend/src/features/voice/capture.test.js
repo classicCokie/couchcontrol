@@ -261,3 +261,80 @@ test('dismissal clears every take and an old additional upload cannot append int
   old.resolve({ text: 'Must not appear.' }); await release
   assert.equal(capture.state.text, 'New draft.')
 })
+
+test('remove last unwinds whole takes, keeps the overlay ready, and allows a fresh take', async () => {
+  const results = ['First. Still first.', 'Second.', 'Third.', 'Fresh.']
+  const { capture, calls } = harness({ transcribe: async () => ({ text: results.shift() }) })
+  for (let i = 0; i < 3; i++) { await capture.press(); await capture.release() }
+  for (const expected of ['First. Still first. Second.', 'First. Still first.', '', '']) {
+    capture.removeLast()
+    assert.equal(capture.state.text, expected)
+    assert.equal(capture.state.phase, 'ready')
+  }
+  await capture.confirm()
+  assert.deepEqual(calls.copies, [])
+  await capture.press(); await capture.release(); await capture.confirm()
+  assert.deepEqual(calls.copies, ['Fresh.'])
+})
+
+test('empty and failed takes do not consume an undo and copying uses only remaining takes', async () => {
+  const results = ['Keep.', 'Remove.', '   ', new Error('Upload failed')]
+  const { capture, calls } = harness({ transcribe: async () => {
+    const result = results.shift()
+    if (result instanceof Error) throw result
+    return { text: result }
+  } })
+  for (let i = 0; i < 4; i++) { await capture.press(); await capture.release() }
+  capture.removeLast()
+  assert.equal(capture.state.text, 'Keep.')
+  assert.equal(capture.state.error, '')
+  await capture.confirm()
+  assert.deepEqual(calls.copies, ['Keep.'])
+})
+
+test('remove last is ignored while preparing, recording, uploading, or copying', async () => {
+  const mic = deferred(), requested = deferred(), upstream = deferred(), uploading = deferred(), clipboard = deferred()
+  let recordings = 0, uploads = 0
+  const { capture, recorder } = harness({
+    record: () => {
+      if (++recordings === 1) return Promise.resolve(recorder)
+      requested.resolve(); return mic.promise
+    },
+    transcribe: () => {
+      if (++uploads === 1) return Promise.resolve({ text: 'First.' })
+      uploading.resolve(); return upstream.promise
+    },
+    copy: () => clipboard.promise,
+  })
+  await capture.press(); await capture.release()
+  const opening = capture.press()
+  await requested.promise
+  capture.removeLast()
+  assert.equal(capture.state.text, 'First.')
+  mic.resolve(recorder); await opening
+  capture.removeLast()
+  assert.equal(capture.state.text, 'First.')
+  const release = capture.release()
+  await uploading.promise
+  capture.removeLast()
+  assert.equal(capture.state.text, 'First.')
+  upstream.resolve({ text: 'Second.' }); await release
+  const copying = capture.confirm()
+  capture.removeLast()
+  assert.equal(capture.state.text, 'First. Second.')
+  clipboard.resolve(); await copying
+})
+
+test('dismissal and successful copy clear the take history', async () => {
+  for (const finish of ['cancel', 'confirm']) {
+    const { capture } = harness()
+    await capture.press(); await capture.release()
+    await capture[finish]()
+    capture.removeLast()
+    assert.equal(capture.state.phase, 'idle')
+    await capture.press(); await capture.release()
+    capture.removeLast()
+    assert.equal(capture.state.text, '')
+    assert.equal(capture.state.phase, 'ready')
+  }
+})

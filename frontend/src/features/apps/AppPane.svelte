@@ -3,6 +3,7 @@
   import CodexApp from '../../apps/codex/CodexApp.svelte'
   import SettingsApp from '../../apps/settings/SettingsApp.svelte'
   import BrowserApp from '../../apps/browser/BrowserApp.svelte'
+  import NotesApp from '../../apps/notes/NotesApp.svelte'
   export let app
   export let definition
   export let active = true
@@ -10,19 +11,20 @@
   export let canPaste = () => true
   export let onback = () => {}
   export let onupdate = () => {}
-  let codex, settings, browser, content, back
+  let codex, settings, browser, notes, content, back
   export function focusNavigation() {
     if (codex) codex.focusInput()
     else if (settings) settings.focusNavigation()
     else if (browser) browser.focusNavigation()
+    else if (notes) notes.focusNavigation()
     else back?.focus({ preventScroll: true })
   }
-  export function control(action) { return codex?.control(action) || settings?.control(action) || browser?.control(action) }
+  export function control(action) { return codex?.control(action) || settings?.control(action) || browser?.control(action) || notes?.control(action) }
   export function handleKeydown(event) { return codex?.handleKeydown(event) || settings?.handleKeydown(event) }
   export function pressEnter() { return codex?.pressEnter() || browser?.pressEnter() }
-  export function pasteClipboard() { return codex?.pasteClipboard() || browser?.pasteClipboard() }
-  export function captureEmptyInput() { return codex ? codex.captureEmptyInput() : browser?.captureEmptyInput() }
-  export function pasteIfEmpty(text, snapshot) { return codex ? codex.pasteIfEmpty(text, snapshot) : browser?.pasteIfEmpty(text, snapshot) }
+  export function pasteClipboard() { return codex?.pasteClipboard() || browser?.pasteClipboard() || notes?.pasteClipboard() }
+  export function captureEmptyInput() { return codex ? codex.captureEmptyInput() : notes ? notes.captureEmptyInput() : browser?.captureEmptyInput() }
+  export function pasteIfEmpty(text, snapshot) { return codex ? codex.pasteIfEmpty(text, snapshot) : notes ? notes.pasteIfEmpty(text, snapshot) : browser?.pasteIfEmpty(text, snapshot) }
   export function scroll(action) { content?.scrollBy({ top: action === 'up' ? -100 : 100, behavior: 'instant' }) }
 </script>
 
@@ -31,6 +33,8 @@
     <CodexApp bind:this={codex} title={app.title} {active} {canPaste} oncancel={onback} />
   {:else if definition.id === 'browser'}
     <BrowserApp bind:this={browser} title={app.title} initialUrl={app.browserUrl || ''} onnavigate={browserUrl => onupdate({ browserUrl })} {active} {canPaste} {onback} />
+  {:else if definition.id === 'write'}
+    <NotesApp bind:this={notes} {active} {canPaste} />
   {:else}
     <span class="surface-mark" aria-hidden="true"><AppIcon type={definition.id} /></span>
     <button bind:this={back} class="back-button" onclick={onback}><span aria-hidden="true">←</span> Your apps <kbd>esc</kbd></button>

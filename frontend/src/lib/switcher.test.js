@@ -39,7 +39,7 @@ test('vertical navigation stays in the picker until Back or confirmation', () =>
 })
 
 test('all apps including Codex can be added and opened as independent instances', () => {
-  assert.deepEqual(availableApps.map(app => app.title), ['Agent', 'Mail', 'Chatbot', 'Browser', 'Write', 'Codex', 'Settings'])
+  assert.deepEqual(availableApps.map(app => app.title), ['Agent', 'Mail', 'Chatbot', 'Browser', 'Notes', 'Codex', 'Settings'])
   let state = initialSwitcher()
   for (let index = 0; index < addableApps.length; index++) {
     state = navigate({ ...state, selected: 0 }, 'confirm')

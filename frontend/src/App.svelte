@@ -62,7 +62,7 @@
     const target = voiceTarget
     voiceTarget = null
     await tick()
-    if (target && (codexOpen || browserOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
+    if (target && (codexOpen || browserOpen || notesOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
       activePane.pasteIfEmpty(text, target.input)
     }
   }
@@ -93,6 +93,7 @@
   $: activeDefinition = availableApps.find(app => app.id === activeApp?.type)
   $: codexOpen = appOpen && !pickerOpen && activeDefinition?.id === 'codex'
   $: settingsOpen = appOpen && !pickerOpen && activeDefinition?.id === 'settings'
+  $: notesOpen = appOpen && !pickerOpen && activeDefinition?.id === 'write'
   $: browserOpen = appOpen && !pickerOpen && activeDefinition?.id === 'browser'
 
   function updateApp(id, changes) {
@@ -142,8 +143,10 @@
   }
 
   async function act(action) {
+    // Trigger releases must reach Notes even while another overlay owns input.
+    if (action === 'mark-end' || action === 'mark-cancel') { activePane?.control(action); return }
     if (action === 'record-start' && !voiceOpen) {
-      voiceTarget = (codexOpen || browserOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
+      voiceTarget = (codexOpen || browserOpen || notesOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
     }
     if (voiceOverlay?.handleAction(action)) return
     if (folderRequest) { folderPicker?.handleAction(action); return }
@@ -172,12 +175,12 @@
       return
     }
     if (action === 'paste') {
-      if (codexOpen || browserOpen) activePane?.pasteClipboard()
+      if (codexOpen || browserOpen || notesOpen) activePane?.pasteClipboard()
       else if (state.view === 'menu' && activeEntry) { closeError = ''; closeRequest = activeEntry }
       return
     }
     if (settingsOpen && settingsApp?.control(action)) return
-    if (browserOpen && activePane?.control(action)) return
+    if ((browserOpen || notesOpen) && activePane?.control(action)) return
     if (appOpen && !pickerOpen && (action === 'up' || action === 'down')) {
       activePane?.scroll(action)
       return
@@ -394,11 +397,11 @@
           </section>
         {/if}
       </div>
-      {#if !grouped && !browserOpen}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
+      {#if !grouped && !browserOpen && !notesOpen}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
     </div>
   {/if}
 
-  {#if !codexOpen || grouped}
+  {#if (!codexOpen || grouped) && !notesOpen}
   <div class="input-hint" aria-live="polite">
     {#if appOpen && grouped}<span><kbd>L1</kbd> Left · <kbd>R1</kbd> Right</span><span>Alt + ← / →</span>{/if}
     {#if appOpen && grouped}<span>△ / Y · {activeApp ? 'Close focused app' : 'Close empty side'}</span>{/if}
@@ -430,4 +433,4 @@
     <CloseAppDialog bind:this={closeDialog} app={closeRequest} busy={closeBusy} error={closeError} {reducedMotion} onconfirm={confirmClose} oncancel={cancelClose} />
   </div>
 {/if}
-<VoiceOverlay bind:this={voiceOverlay} bind:opened={voiceOpen} oncopied={voiceCopied} />
+<VoiceOverlay bind:this={voiceOverlay} bind:opened={voiceOpen} directToNote={notesOpen && !!voiceTarget?.input} oncopied={voiceCopied} />

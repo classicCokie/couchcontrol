@@ -3,7 +3,7 @@ export const availableApps = [
   { id: 'mail', title: 'Mail', icon: '✉', glow: '#4e719c', base: '#172a40', ink: '#bfdcff', tagline: 'A space for your conversations.', connection: 'A mail account hasn’t been connected yet.' },
   { id: 'chatbot', title: 'Chatbot', icon: '♧', glow: '#7c629a', base: '#2c203e', ink: '#e2c9ff', tagline: 'Every conversation starts somewhere.', connection: 'A chatbot connection hasn’t been set up yet.' },
   { id: 'browser', title: 'Browser', icon: '◎', glow: '#92734d', base: '#362a1c', ink: '#f7d6a5', tagline: 'Room to explore.', connection: 'A browsing session hasn’t been connected yet.' },
-  { id: 'write', title: 'Write', icon: '✎', glow: '#926c6b', base: '#382426', ink: '#ffd1c7', tagline: 'Make room for your next sentence.', connection: 'A writing session hasn’t been connected yet.' },
+  { id: 'write', title: 'Notes', icon: '✎', glow: '#926c6b', base: '#382426', ink: '#ffd1c7', tagline: 'A quiet place for your thoughts.', connection: 'Dictate your thoughts into beautiful notes.' },
   { id: 'codex', title: 'Codex', icon: '>_', glow: '#375c50', base: '#112820', ink: '#c0eccc', tagline: 'Your local Codex, from anywhere.', connection: 'Open a terminal on your machine.' },
   { id: 'settings', title: 'Settings', icon: '⚙', glow: '#526584', base: '#1b273b', ink: '#cedfff', tagline: 'Make yourself at home.', connection: 'General app preferences.' },
 ]

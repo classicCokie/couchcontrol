@@ -3,6 +3,7 @@
 export function createVoiceCapture({ configured, record, transcribe, copy, changed, copied = () => {} }) {
   let state = { phase: 'idle', text: '', error: '', stream: null }
   let generation = 0, held = false, recording, upload
+  const takes = []
   const emit = patch => { state = { ...state, ...patch }; changed(state) }
   function stopWork() {
     generation++
@@ -14,7 +15,13 @@ export function createVoiceCapture({ configured, record, transcribe, copy, chang
   }
   function cancel() {
     stopWork()
+    takes.length = 0
     emit({ phase: 'idle', stream: null, text: '', error: '' })
+  }
+  function removeLast() {
+    if (state.phase !== 'ready' || !takes.length) return
+    takes.pop()
+    emit({ text: takes.join(' '), error: '' })
   }
   function fail(error) {
     stopWork()
@@ -62,7 +69,8 @@ export function createVoiceCapture({ configured, record, transcribe, copy, chang
       if (id !== generation) return
       upload = undefined
       const addition = result.text.trim()
-      emit({ phase: 'ready', text: [state.text, addition].filter(Boolean).join(' '), error: !addition && state.text ? 'No additional speech was detected. Hold R2 to try again.' : '' })
+      if (addition) takes.push(addition)
+      emit({ phase: 'ready', text: takes.join(' '), error: !addition && state.text ? 'No additional speech was detected. Hold R2 to try again.' : '' })
     } catch (error) {
       if (id !== generation) return
       fail(error)
@@ -82,5 +90,5 @@ export function createVoiceCapture({ configured, record, transcribe, copy, chang
     cancel()
     copied(text)
   }
-  return { press, release, cancel, confirm, get state() { return state } }
+  return { press, release, cancel, confirm, removeLast, get state() { return state } }
 }

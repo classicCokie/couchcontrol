@@ -2,6 +2,13 @@
 
 A Svelte app switcher with keyboard and gamepad controls.
 
+To install CouchControl with its own icon and window, open the running app in
+Chrome or Edge and choose **Install CouchControl** from the address bar or browser
+menu. In Safari on macOS, use **File → Add to Dock**; on iPhone or iPad, use
+**Share → Add to Home Screen**. Use HTTPS or localhost for installation.
+The installed app still needs the CouchControl server running: no service worker,
+offline mode, or additional caching is included.
+
 The **Browser** app has a single natural-language command bar. Hold R2, speak,
 release, and press Cross/A to paste the transcript into an empty command bar.
 Press Cross/A again to run it. Try “Open localhost on port three thousand”,

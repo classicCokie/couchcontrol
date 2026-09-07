@@ -232,3 +232,43 @@ test('right-stick horizontal movement is ignored and Circle wins simultaneous st
   pad.buttons[1].pressed = true
   assert.deepEqual(read(pad, 1), ['back'])
 })
+
+test('Start / Options creates a note once per press, with Back taking priority', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.buttons[9].pressed = true
+  assert.deepEqual(read(pad, 0), ['new-note'])
+  assert.deepEqual(read(pad, 1000), [])
+  pad.buttons[9].pressed = false; read(pad, 1001)
+  pad.buttons[9].pressed = true
+  assert.deepEqual(read(pad, 1002), ['new-note'])
+  pad.buttons[9].pressed = false; read(pad, 1003)
+  pad.buttons[9].pressed = true; pad.buttons[1].pressed = true
+  assert.deepEqual(read(pad, 1004), ['back'])
+})
+
+test('L2 marking uses hysteresis and continues right-stick movement while held', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.buttons[6].value = .8
+  assert.deepEqual(read(pad, 0), ['mark-start'])
+  pad.buttons[6].value = .3
+  assert.deepEqual(read(pad, 1), [])
+  pad.axes = [0, 0, 0, .8]
+  assert.deepEqual(read(pad, 2), ['right-stick-down'])
+  assert.deepEqual(read(pad, 402), ['right-stick-down'])
+  pad.buttons[6].value = .1
+  assert.deepEqual(read(pad, 403), ['mark-end'])
+})
+
+test('losing controller focus cancels held L2 marking', () => {
+  const { state, step } = harness(), pad = gamepad()
+  state.pads = [pad]; step()
+  pad.buttons[6].pressed = true; step()
+  assert.deepEqual(state.actions, ['mark-start'])
+  state.focused = false; step()
+  assert.deepEqual(state.actions, ['mark-start', 'mark-cancel'])
+  state.focused = true; step()
+  assert.deepEqual(state.actions, ['mark-start', 'mark-cancel'])
+  pad.buttons[6].pressed = false; step()
+  pad.buttons[6].pressed = true; step()
+  assert.deepEqual(state.actions, ['mark-start', 'mark-cancel', 'mark-start'])
+})

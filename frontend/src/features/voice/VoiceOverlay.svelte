@@ -9,12 +9,13 @@
   import Waveform from './Waveform.svelte'
 
   export let opened = false
+  export let directToNote = false
   export let oncopied = () => {}
   let state = { phase: 'idle', text: '', error: '', stream: null }
   let dialog, transcript, previousFocus, reducedMotion = false
   const capture = createVoiceCapture({
     configured: async () => (await platformRequest('/settings')).whisperConfigured,
-    record: startRecording, transcribe, copy: copyText, copied: text => oncopied(text),
+    record: startRecording, transcribe, copy: text => directToNote ? Promise.resolve() : copyText(text), copied: text => oncopied(text),
     changed(next) {
       const wasOpen = opened
       const previousText = state.text
@@ -41,6 +42,7 @@
     if (capture.state.phase === 'idle') return false
     if (action === 'back') capture.cancel()
     if (action === 'confirm') capture.confirm()
+    if (action === 'paste') capture.removeLast()
     if (action === 'up' || action === 'down') transcript?.scrollBy({ top: action === 'up' ? -100 : 100 })
     return true
   }
@@ -66,7 +68,7 @@
     document.addEventListener('visibilitychange', hidden)
     return () => { capture.cancel(); window.removeEventListener('keydown', keys, true); document.removeEventListener('visibilitychange', hidden); motion.removeEventListener('change', updateMotion) }
   })
-  $: heading = { preparing: 'Getting your microphone ready…', recording: 'Listening', transcribing: 'Transcribing…', ready: 'Your words', copying: 'Copying…', error: 'Unable to transcribe' }[state.phase]
+  $: heading = { preparing: 'Getting your microphone ready…', recording: 'Listening', transcribing: 'Transcribing…', ready: 'Your words', copying: directToNote ? 'Sending to note…' : 'Copying…', error: 'Unable to transcribe' }[state.phase]
 </script>
 
 {#if opened}
@@ -82,14 +84,15 @@
         {:else if state.phase === 'recording'}<p>Keep holding R2 while you speak. Release to transcribe.</p>
         {:else if state.phase === 'preparing'}<p>Allow microphone access if prompted, then keep holding R2.</p>
         {:else if state.phase === 'transcribing'}<p>Turning your recording into text…</p>
-        {:else if state.phase === 'ready'}<p>No speech was detected. Hold R2 to try again.</p>{/if}
+        {:else if state.phase === 'ready'}<p>No text yet. Hold R2 to record.</p>{/if}
       </div>
       {#if state.text}
-        <p class="append-hint" role="status">{state.phase === 'recording' ? 'Keep holding R2. Release to add these words.' : state.phase === 'transcribing' ? 'Transcribing your next words…' : state.phase === 'preparing' ? 'Preparing the microphone. Your text is saved above.' : state.phase === 'copying' ? 'Copying your complete transcript…' : 'Hold R2 to add more · × / A to copy all text'}</p>
+        <p class="append-hint" role="status">{state.phase === 'recording' ? 'Keep holding R2. Release to add these words.' : state.phase === 'transcribing' ? 'Transcribing your next words…' : state.phase === 'preparing' ? 'Preparing the microphone. Your text is saved above.' : state.phase === 'copying' ? directToNote ? 'Sending your complete transcript…' : 'Copying your complete transcript…' : directToNote ? 'Hold R2 to add more · □ / X to remove last · × / A to update note' : 'Hold R2 to add more · □ / X to remove last · × / A to copy all text'}</p>
       {/if}
       <footer>
         <button onclick={() => capture.cancel()}><span class="controller-key">○</span>{['preparing', 'recording'].includes(state.phase) ? 'Cancel recording' : 'Dismiss'}</button>
-        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? 'Copying…' : 'Copy all text'}</button>
+        <button onclick={() => capture.removeLast()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">□</span>Remove last transcription</button>
+        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? (directToNote ? 'Sending…' : 'Copying…') : (directToNote ? 'Update note' : 'Copy all text')}</button>
       </footer>
     </div>
   </div>
@@ -109,11 +112,11 @@
   .words { font-size: clamp(19px, 2.1vw, 28px); color: #eef9f1; white-space: pre-wrap; overflow-wrap: anywhere; }
   .error { color: #ffcbc2; margin-bottom: 8px; }
   .append-hint { flex-shrink: 0; font-size: 12px; color: #c5e4d5; }
-  footer { display: flex; gap: 16px; justify-content: space-between; margin-top: 12px; }
+  footer { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; margin-top: 12px; }
   button { display: flex; align-items: center; gap: 12px; background: #ffffff08; border: 1px solid #ffffff25; border-radius: 12px; padding: 12px 18px; font-size: 14px; }
   button:hover { background: #ffffff16; }
   .copy { background: #bee9ca; color: #142d24; border-color: transparent; }
-  .copy:disabled { opacity: .3; cursor: default; }
+  button:disabled { opacity: .3; cursor: default; }
   .controller-key { font-size: 24px; line-height: 1; }
   @media (max-height: 580px) { .voice-dialog { height: 90dvh; padding-bottom: 12px; } .handle { margin-bottom: 8px; } }
 </style>

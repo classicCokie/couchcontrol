@@ -29,3 +29,6 @@ backend/codex/codex-web
 *.db-*
 *.pem
 *.key
+
+# Private notes
+.couchcontrol/notes/

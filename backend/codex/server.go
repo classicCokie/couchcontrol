@@ -2,6 +2,7 @@ package main
 
 import (
 	"couchcontrol/backend/browser"
+	"couchcontrol/backend/notes"
 	"couchcontrol/backend/platform"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -71,6 +73,7 @@ func (s *server) handler(staticDir string) http.Handler {
 	mux := http.NewServeMux()
 	shared := platform.New(s.manager.db, nil)
 	shared.Register(mux)
+	notes.New(filepath.Join(s.manager.cwd, ".couchcontrol", "notes"), shared.OpenAIKey).Register(mux)
 	s.browser = browser.NewEngine()
 	browserHandler := browser.New(shared.OpenAIKey, nil)
 	browserHandler.Engine = s.browser
