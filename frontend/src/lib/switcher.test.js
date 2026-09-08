@@ -25,7 +25,7 @@ test('each add creates a distinct instance and selects the new tile', () => {
     assert.equal(state.view, 'menu')
     assert.equal(state.apps.length, id + 1)
     assert.equal(state.selected, id + 1)
-    assert.deepEqual(state.apps[id], { id, type: 'agent', title: `Agent ${id}` })
+    assert.deepEqual(state.apps[id], { id, type: 'agent', title: 'Agent' })
   }
   assert.equal(new Set(state.apps.map(app => app.id)).size, 4)
 })
@@ -46,14 +46,14 @@ test('all apps including Codex and Claude can be added and opened as independent
     for (let step = 0; step < index; step++) state = navigate(state, 'down')
     state = navigate(state, 'confirm')
     assert.equal(state.apps[index + 1].type, addableApps[index].id)
-    assert.equal(state.apps[index + 1].title, addableApps[index].title + ' 1')
+    assert.equal(state.apps[index + 1].title, addableApps[index].title)
     state = navigate(state, 'confirm')
     assert.equal(state.view, 'app')
     assert.equal(state.selected, index + 2)
     state = navigate(state, 'back')
   }
   state = perform({ ...state, selected: 0 }, 'confirm', 'down', 'confirm')
-  assert.equal(state.apps.at(-1).title, 'Mail 2')
+  assert.equal(state.apps.at(-1).title, 'Mail')
   assert.equal(new Set(state.apps.map(app => app.id)).size, availableApps.length + 1)
 })
 
@@ -67,7 +67,7 @@ test('vertical catalog navigation selects apps and stops at the first and last',
   state = navigate(state, 'up', catalog)
   assert.equal(state.pickerSelected, 1)
   state = navigate(state, 'confirm', catalog)
-  assert.equal(state.apps.at(-1).title, 'Second 1')
+  assert.equal(state.apps.at(-1).title, 'Second')
   assert.equal(state.view, 'menu')
 })
 
@@ -84,13 +84,13 @@ test('switching and returning preserves all instances and the selected tile', ()
   state = perform({ ...state, selected: 0 }, 'confirm', 'confirm')
   state = perform(state, 'left', 'confirm')
   assert.equal(state.view, 'app')
-  assert.equal(state.apps[state.selected - 1].title, 'Agent 1')
+  assert.equal(state.apps[state.selected - 1].title, 'Agent')
   assert.equal(navigate(state, 'right'), state)
   state = navigate(state, 'back')
   assert.equal(state.selected, 2)
   assert.equal(state.apps.length, 3)
   state = perform(state, 'right', 'confirm')
-  assert.equal(state.apps[state.selected - 1].title, 'Agent 2')
+  assert.equal(state.apps[state.selected - 1].title, 'Agent')
 })
 
 test('horizontal navigation wraps across plus and app tiles', () => {
@@ -131,15 +131,15 @@ test('Settings opens immediately without adding an instance', () => {
   assert.equal(state.apps.length, 1)
 })
 
-test('closing a middle app preserves the other cards and future names stay unique', () => {
+test('closing a middle app preserves the other cards and future instances stay distinct', () => {
   let state = initialSwitcher()
   for (let i = 0; i < 3; i++) state = perform({ ...state, selected: 0 }, 'confirm', 'confirm')
   const closed = state.apps[2].id
   state = removeApp({ ...state, selected: 3 }, closed)
-  assert.deepEqual(state.apps.map(app => app.title), ['Settings', 'Agent 1', 'Agent 3'])
+  assert.deepEqual(state.apps.map(app => app.title), ['Settings', 'Agent', 'Agent'])
   assert.equal(state.selected, 3)
   state = perform({ ...state, selected: 0 }, 'confirm', 'confirm')
-  assert.equal(state.apps.at(-1).title, 'Agent 4')
+  assert.equal(state.apps.at(-1).title, 'Agent')
   state = removeApp(state, state.apps.at(-1).id)
   assert.equal(state.selected, state.apps.length)
 })

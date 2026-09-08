@@ -16,8 +16,8 @@ export const allApps = state => state.apps.flatMap(members)
 export const groupTitle = apps => apps.filter(Boolean).map(app => app.title).join(' + ')
 const replaceSelected = (state, entry) => ({ ...state, apps: state.apps.map((app, index) => index === state.selected - 1 ? entry : app) })
 function newInstance(state, definition) {
-  const number = Math.max(0, ...allApps(state).filter(app => app.type === definition.id).map(app => Number(app.title.slice(definition.title.length + 1)) || 0)) + 1
-  return { id: state.nextId, type: definition.id, title: `${definition.title} ${number}` }
+  return { id: state.nextId, type: definition.id, title: definition.title,
+    ...(['codex', 'claude'].includes(definition.id) ? { sessionTitle: `couchcontrol:${definition.id}:${state.nextId}` } : {}) }
 }
 
 export function navigate(state, action, catalog = addableApps) {
@@ -33,7 +33,7 @@ export function navigate(state, action, catalog = addableApps) {
       if (action === 'up' || action === 'down') return { ...state, pickerSelected: Math.max(0, Math.min(catalog.length - 1, state.pickerSelected + (action === 'up' ? -1 : 1))) }
       if (action === 'confirm' && catalog[state.pickerSelected]) {
         const apps = entry.apps.map((app, side) => side === entry.focused ? newInstance(state, catalog[state.pickerSelected]) : app)
-        return { ...replaceSelected(state, { ...entry, apps, title: groupTitle(apps) }), nextId: state.nextId + 1, groupPicker: false }
+        return { ...replaceSelected(state, { ...entry, apps, title: entry.customTitle || groupTitle(apps) }), nextId: state.nextId + 1, groupPicker: false }
       }
       return state
     }
@@ -86,6 +86,31 @@ export function removeGroupApp(state, groupId, appId) {
 }
 
 
+// Display names may change; terminal identities must remain stable.
+export const sessionTitle = app => app.sessionTitle || app.title
+export const folderTitle = path => typeof path === 'string' ? path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path : ''
+
+export function updateApp(state, id, changes) {
+  const update = app => {
+    if (app?.id !== id) return app
+    const next = { ...app, ...changes }
+    if (['codex', 'claude'].includes(app.type)) next.sessionTitle = sessionTitle(app)
+    next.title = next.customTitle || next.defaultTitle || next.title
+    return next
+  }
+  return { ...state, apps: state.apps.map(entry => {
+    if (entry.type !== 'group') return update(entry)
+    const next = update(entry)
+    const apps = next.apps.map(update)
+    return { ...next, apps, title: next.customTitle || groupTitle(apps) }
+  }) }
+}
+
+export function renameEntry(state, id, name) {
+  const customTitle = name.trim()
+  return customTitle ? updateApp(state, id, { customTitle }) : state
+}
+
 const STORAGE_KEY = 'couchcontrol.app-groups.v1'
 export function restoreSwitcher(storage) {
   try {
@@ -98,7 +123,20 @@ export function restoreSwitcher(storage) {
       ? validId(entry.id) && Array.isArray(entry.apps) && entry.apps.length === 2 && entry.apps.some(Boolean) && entry.apps.every(app => app === null || validApp(app)) && [0, 1].includes(entry.focused)
       : validApp(entry))
     if (!valid || allApps(saved).filter(app => app.type === 'settings').length > 1) return initialSwitcher()
-    const apps = saved.apps.map(entry => entry.type === 'group' ? { ...entry, title: groupTitle(entry.apps) } : entry)
+    const restoreApp = app => {
+      if (!app) return null
+      const definition = availableApps.find(def => def.id === app.type)
+      const customTitle = typeof app.customTitle === 'string' ? app.customTitle.trim() : ''
+      const defaultTitle = typeof app.defaultTitle === 'string' && app.defaultTitle.trim() ? app.defaultTitle : definition.title
+      return { ...app, ...(customTitle ? { customTitle } : {}), title: customTitle || defaultTitle,
+        ...(['codex', 'claude'].includes(app.type) ? { sessionTitle: sessionTitle(app) } : {}) }
+    }
+    const apps = saved.apps.map(entry => {
+      if (entry.type !== 'group') return restoreApp(entry)
+      const apps = entry.apps.map(restoreApp)
+      const customTitle = typeof entry.customTitle === 'string' ? entry.customTitle.trim() : ''
+      return { ...entry, apps, ...(customTitle ? { customTitle } : {}), title: customTitle || groupTitle(apps) }
+    })
     return { ...initialSwitcher(), apps, nextId: Math.max(-1, ...ids) + 1, selected: Number.isInteger(saved.selected) ? Math.max(0, Math.min(apps.length, saved.selected)) : 0 }
   } catch { return initialSwitcher() }
 }

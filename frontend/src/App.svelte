@@ -4,9 +4,10 @@
   import { createLayoutMotion, rectTransform } from './lib/layout-motion.js'
   import { cubicOut } from 'svelte/easing'
   import { startGamepadControls } from './lib/gamepad.js'
-  import { availableApps, addableApps, initialSwitcher, navigate, members, allApps, restoreSwitcher, saveSwitcher } from './lib/switcher.js'
+  import { availableApps, addableApps, initialSwitcher, navigate, members, allApps, restoreSwitcher, saveSwitcher, updateApp as updateSwitcherApp, renameEntry } from './lib/switcher.js'
   import AppIcon from './lib/AppIcon.svelte'
   import AppPane from './features/apps/AppPane.svelte'
+  import RenameAppDialog from './features/apps/RenameAppDialog.svelte'
   import CloseAppDialog from './features/apps/CloseAppDialog.svelte'
   import { closeAppRequest } from './lib/close-app.js'
   import { sessionFor } from './apps/codex/session.js'
@@ -22,6 +23,12 @@
   let storageReady = false
   let shelfStorage
   let voiceOpen = false
+  let renameRequest = null, renameDialog
+  function finishRename(name) {
+    if (name && renameRequest) state = renameEntry(state, renameRequest.id, name)
+    renameRequest = null
+    focusSelection()
+  }
   let closeRequest = null, closeDialog, closeBusy = false, closeError = ''
   function cancelClose() {
     if (closeBusy) return
@@ -62,7 +69,11 @@
     const target = voiceTarget
     voiceTarget = null
     await tick()
-    if (target && (terminalOpen || browserOpen || notesOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
+    if (target?.rename && target.rename === renameRequest && !voiceOpen) {
+      renameDialog?.setTranscript(text)
+      return
+    }
+    if (target && (terminalOpen || browserOpen || notesOpen || mailOpen) && target.app === activePane && !voiceOpen && !folderRequest && !closeRequest && !closing) {
       activePane.pasteIfEmpty(text, target.input)
     }
   }
@@ -103,12 +114,12 @@
   $: activeDefinition = availableApps.find(app => app.id === activeApp?.type)
   $: terminalOpen = appOpen && !pickerOpen && ['codex', 'claude'].includes(activeDefinition?.id)
   $: settingsOpen = appOpen && !pickerOpen && activeDefinition?.id === 'settings'
+  $: mailOpen = appOpen && !pickerOpen && activeDefinition?.id === 'mail'
   $: notesOpen = appOpen && !pickerOpen && activeDefinition?.id === 'write'
   $: browserOpen = appOpen && !pickerOpen && activeDefinition?.id === 'browser'
 
   function updateApp(id, changes) {
-    const update = app => app?.id === id ? { ...app, ...changes } : app
-    state = { ...state, apps: state.apps.map(entry => entry.type === 'group' ? { ...entry, apps: entry.apps.map(update) } : update(entry)) }
+    state = updateSwitcherApp(state, id, changes)
   }
 
   const selectedCard = () => cardsViewport?.querySelectorAll('.card')[state.selected]
@@ -156,11 +167,13 @@
     // Trigger releases must reach Notes even while another overlay owns input.
     if (action === 'mark-end' || action === 'mark-cancel') { activePane?.control(action); return }
     if (action === 'record-start' && !voiceOpen) {
-      voiceTarget = (terminalOpen || browserOpen || notesOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
+      voiceTarget = renameRequest ? { rename: renameRequest } : (terminalOpen || browserOpen || notesOpen || mailOpen) && !folderRequest ? { app: activePane, input: activePane?.captureEmptyInput() } : null
     }
     if (voiceOverlay?.handleAction(action)) return
     if (folderRequest) { folderPicker?.handleAction(action); return }
     if (closeRequest) { closeDialog?.handleAction(action); return }
+    if (renameRequest) { renameDialog?.handleAction(action); return }
+    if (state.view === 'menu' && activeEntry && action === 'close-empty') { renameRequest = activeEntry; return }
     if (closing) return
     if (terminalOpen && terminalApp?.control(action)) return
     if (appOpen && grouped && activeApp && action === 'close-empty') {
@@ -185,12 +198,12 @@
       return
     }
     if (action === 'paste') {
-      if (terminalOpen || browserOpen || notesOpen) activePane?.pasteClipboard()
+      if (terminalOpen || browserOpen || notesOpen || mailOpen) activePane?.pasteClipboard()
       else if (state.view === 'menu' && activeEntry) { closeError = ''; closeRequest = activeEntry }
       return
     }
     if (settingsOpen && settingsApp?.control(action)) return
-    if ((browserOpen || notesOpen) && activePane?.control(action)) return
+    if ((browserOpen || notesOpen || mailOpen) && activePane?.control(action)) return
     if (appOpen && !pickerOpen && (action === 'up' || action === 'down')) {
       activePane?.scroll(action)
       return
@@ -232,6 +245,12 @@
     if (voiceOpen) return
     if (folderRequest) { folderPicker?.handleKeydown(event); return }
     if (closeRequest) { closeDialog?.handleKeydown(event); return }
+    if (renameRequest) { renameDialog?.handleKeydown(event); return }
+    if (state.view === 'menu' && event.key === 'F2') {
+      event.preventDefault()
+      if (!event.repeat) act('close-empty')
+      return
+    }
     if (terminalOpen && terminalApp?.handleKeydown(event)) return
     if (appOpen && grouped && event.key === 'Delete' && (!activeApp || event.altKey)) {
       event.preventDefault()
@@ -248,7 +267,7 @@
       if (!event.repeat) act(event.key === 'ArrowLeft' ? 'tile-left' : 'tile-right')
       return
     }
-    if (browserOpen) {
+    if (browserOpen || mailOpen) {
       if (event.key === 'Escape') { event.preventDefault(); act('back') }
       return
     }
@@ -327,7 +346,7 @@
 
 <svelte:window onkeydown={handleKeydown} onresize={() => { layoutMotion.cancel(); surfaceAnimation?.finish() }} />
 
-<main class:picker-open={pickerOpen && !appOpen} inert={voiceOpen || !!folderRequest || !!closeRequest}>
+<main class:picker-open={pickerOpen && !appOpen} inert={voiceOpen || !!folderRequest || !!closeRequest || !!renameRequest}>
   <section class="shelf" class:app-open={appOpen} class:returning={closing} inert={appOpen || pickerOpen} aria-label="App switcher">
     <div bind:this={cardsViewport} class="cards" role="toolbar" aria-label="Your apps" onscrollend={() => { if (!appOpen) centerSelected() }}>
       <button class="card add-card" class:chosen={state.selected === 0} tabindex={state.selected === 0 ? 0 : -1}
@@ -348,7 +367,7 @@
                 </span>
               {/each}
             </span>
-            <span class="group-label">App group</span>
+            <span class="group-label">{app.title}</span>
           {:else}
             <span class="app-mark" aria-hidden="true"><AppIcon type={definition.id} /></span>
             <span class="card-caption"><strong>{app.title}</strong><small>Your workspace</small></span>
@@ -407,7 +426,7 @@
           </section>
         {/if}
       </div>
-      {#if !grouped && !browserOpen && !notesOpen}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
+      {#if !grouped && !browserOpen && !notesOpen && !mailOpen}<div class="tiling-controls"><button onclick={() => act('tile-left')}><kbd>L1</kbd> Tile left</button><button onclick={() => act('tile-right')}>Tile right <kbd>R1</kbd></button></div>{/if}
     </div>
   {/if}
 
@@ -421,11 +440,11 @@
       <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>
       {#if !appOpen || pickerOpen || !activeApp}<span>Bottom button · {pickerOpen ? 'Add' : 'Open'}</span>{/if}
       {#if appOpen || pickerOpen}<span>Right button · Back</span>{/if}
-      {#if state.view === 'menu' && activeEntry}<span>□ · {grouped ? 'Close group' : 'Close app'}</span>{/if}
+      {#if state.view === 'menu' && activeEntry}<span>△ / Y · Rename</span><span>□ · {grouped ? 'Close group' : 'Close app'}</span>{/if}
     {:else}
       <span>{pickerOpen ? '↑ ↓ Choose' : appOpen ? (activeApp?.title || 'Add an app') : '← → Browse'}</span>
       {#if !appOpen || pickerOpen || !activeApp}<span><kbd>enter</kbd> {pickerOpen ? 'Add' : 'Open'}</span>{/if}
-      {#if state.view === 'menu' && activeEntry}<span><kbd>delete</kbd> {grouped ? 'Close group' : 'Close app'}</span>{/if}
+      {#if state.view === 'menu' && activeEntry}<span><kbd>F2</kbd> Rename</span><span><kbd>delete</kbd> {grouped ? 'Close group' : 'Close app'}</span>{/if}
       {#if pickerOpen || (appOpen && !['codex', 'claude'].includes(activeDefinition?.id))}<span><kbd>esc</kbd> Back</span>{/if}
     {/if}
   </div>
@@ -444,4 +463,9 @@
     <CloseAppDialog bind:this={closeDialog} app={closeRequest} busy={closeBusy} error={closeError} {reducedMotion} onconfirm={confirmClose} oncancel={cancelClose} />
   </div>
 {/if}
-<VoiceOverlay bind:this={voiceOverlay} bind:opened={voiceOpen} directToNote={notesOpen && !!voiceTarget?.input} oncopied={voiceCopied} />
+{#if renameRequest}
+  <div inert={voiceOpen}>
+    <RenameAppDialog bind:this={renameDialog} title={renameRequest.title} onconfirm={finishRename} oncancel={() => finishRename(null)} />
+  </div>
+{/if}
+<VoiceOverlay bind:this={voiceOverlay} directToName={!!renameRequest} bind:opened={voiceOpen} directToNote={notesOpen && !!voiceTarget?.input} oncopied={voiceCopied} />

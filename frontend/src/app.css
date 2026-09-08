@@ -17,8 +17,8 @@ main { --card-width: clamp(245px, 24vw, 360px); --card-height: calc(var(--card-w
 .plus { font-size: 88px; font-weight: 400; line-height: 1; color: #cde3da; }
 .app-card, .app-surface { background: radial-gradient(ellipse at 80% 0%, var(--app-glow) 0, transparent 65%), var(--app-base); }
 .app-mark { position: absolute; top: 20px; left: 24px; font-size: 56px; line-height: 1; color: var(--app-ink); }
-.card-caption { position: absolute; left: 24px; bottom: 20px; display: grid; gap: 4px; }
-.card-caption strong { font-size: 23px; font-weight: 500; }
+.card-caption { position: absolute; right: 24px; left: 24px; bottom: 20px; display: grid; gap: 4px; }
+.card-caption strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 23px; font-weight: 500; }
 .card-caption small { font-size: 12px; color: #b5ccc0; }
 .picker-stage { position: fixed; inset: 0; z-index: 4; overflow: hidden; }
 .vertical-viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; overscroll-behavior: none; mask-image: linear-gradient(to bottom, transparent 18%, #000 36%, #000 78%, transparent 96%); }
@@ -57,7 +57,7 @@ h1 { font-size: clamp(48px, 8vw, 110px); font-weight: 500; letter-spacing: -.065
 .group-half + .group-half { border-left: 1px solid #ffffff35; }
 .group-icon { font-size: 40px; color: var(--app-ink); line-height: 1; }
 .group-half strong { font-size: clamp(13px, 1.4vw, 19px); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.group-label { position: absolute; bottom: 0; inset-inline: 0; padding: 9px 16px; background: #08151080; color: #d2e5dc; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.group-label { position: absolute; bottom: 0; inset-inline: 0; padding: 9px 16px; background: #08151080; color: #d2e5dc; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-pane { position: relative; z-index: 1; transform-origin: 0 0; min-width: 0; min-height: 0; height: 100%; background: radial-gradient(ellipse at 80% 0%, var(--app-glow), transparent 65%), var(--app-base); }
 .pane-body { position: absolute; inset: 0; }
 .split-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px 8px 62px; background: #080f14; }

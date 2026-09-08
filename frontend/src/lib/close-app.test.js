@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { closeAppRequest } from './close-app.js'
-import { initialSwitcher, navigate, availableApps, members, restoreSwitcher, saveSwitcher } from './switcher.js'
+import { initialSwitcher, navigate, availableApps, members, sessionTitle, restoreSwitcher, saveSwitcher } from './switcher.js'
 
 function group(second = 'codex') {
   let state = { ...initialSwitcher(), view: 'picker', pickerSelected: availableApps.findIndex(app => app.id === 'codex') }
@@ -17,7 +17,7 @@ for (const side of [0, 1]) {
   test(`confirming closure of pane ${side} cleans up only its session and keeps the other app open`, async () => {
     const state = group(), entry = state.apps.at(-1), calls = []
     const closed = await closeAppRequest(state, { ...entry.apps[side], groupId: entry.id }, async title => calls.push(title))
-    assert.deepEqual(calls, [entry.apps[side].title])
+    assert.deepEqual(calls, [sessionTitle(entry.apps[side])])
     assert.equal(closed.view, 'app')
     assert.equal(closed.selected, state.selected)
     assert.equal(closed.apps.at(-1), entry.apps[1 - side])
@@ -56,7 +56,7 @@ test('closing the only occupied pane returns to the shelf with no empty group', 
 test('a mixed Codex and Claude group closes each provider independently', async () => {
   const state = group('claude'), entry = state.apps.at(-1), calls = []
   const closed = await closeAppRequest(state, entry, async (title, provider) => calls.push([title, provider]))
-  assert.deepEqual(calls, entry.apps.map(app => [app.title, app.type]))
+  assert.deepEqual(calls, entry.apps.map(app => [sessionTitle(app), app.type]))
   assert.equal(closed.apps.some(app => app.id === entry.id), false)
   let saved
   saveSwitcher(state, { setItem: (_, value) => { saved = value } })

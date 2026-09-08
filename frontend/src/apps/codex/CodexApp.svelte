@@ -8,6 +8,13 @@
   $: profile = terminalProfiles[provider]
 
   export let title = 'Codex'
+  export let sessionKey = title
+  export let ontitle = () => {}
+  async function openSession(signal) {
+    const session = await profile.openSession(sessionKey, () => signal.aborted ? null : chooseFolder({ signal, title: `Choose a folder for ${title}` }))
+    if (!signal.aborted && session?.cwd) ontitle(session.cwd)
+    return session
+  }
   export let active = true
   export let canPaste = () => true
   export let oncancel = () => {}
@@ -69,7 +76,7 @@
 </script>
 
 <div class="codex-terminal" inert={menuOpen}>
-<Terminal bind:this={terminal} {profile} {active} canPaste={() => canPaste() && !menuOpen} canCommand={canPaste} {oncancel} openSession={signal => profile.openSession(title, () => signal.aborted ? null : chooseFolder({ signal, title: `Choose a folder for ${title}` }))} />
+<Terminal bind:this={terminal} {profile} {active} canPaste={() => canPaste() && !menuOpen} canCommand={canPaste} {oncancel} {openSession} />
 
 </div>
 {#if menuOpen}

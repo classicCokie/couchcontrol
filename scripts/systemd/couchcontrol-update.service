@@ -1,0 +1,12 @@
+[Unit]
+Description=Build and deploy new CouchControl main commits
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/couchcontrol/update.env
+ExecStart=/bin/bash -c 'exec /bin/bash "$COUCHCONTROL_REPO/scripts/update-production.sh"'
+TimeoutStartSec=30min
+UMask=0077

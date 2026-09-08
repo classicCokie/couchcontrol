@@ -59,10 +59,10 @@ test('picker owns navigation and shoulders while open and clamps selection', () 
   assert.equal(state.view, 'app')
 })
 
-test('instance names include group members and settings stays unique in the catalog', () => {
+test('instances include group members and settings stays unique in the catalog', () => {
   let state = perform(opened(), 'tile-left', 'confirm', 'confirm', 'back')
   state = perform({ ...state, selected: 0 }, 'confirm', 'confirm')
-  assert.deepEqual(allApps(state).map(app => app.title), ['Settings', 'Agent 1', 'Agent 2', 'Agent 3'])
+  assert.deepEqual(allApps(state).map(app => app.title), ['Settings', 'Agent', 'Agent', 'Agent'])
   const settings = perform(initialSwitcher(), 'right', 'confirm', 'tile-right')
   assert.equal(allApps(settings).filter(app => app.type === 'settings').length, 1)
   assert.equal(availableApps.filter(def => def.id !== 'settings').length, 7)

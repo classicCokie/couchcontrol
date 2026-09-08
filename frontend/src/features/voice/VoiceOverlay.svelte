@@ -10,12 +10,13 @@
 
   export let opened = false
   export let directToNote = false
+  export let directToName = false
   export let oncopied = () => {}
   let state = { phase: 'idle', text: '', error: '', stream: null }
   let dialog, transcript, previousFocus, reducedMotion = false
   const capture = createVoiceCapture({
     configured: async () => (await platformRequest('/settings')).whisperConfigured,
-    record: startRecording, transcribe, copy: text => directToNote ? Promise.resolve() : copyText(text), copied: text => oncopied(text),
+    record: startRecording, transcribe, copy: text => (directToNote || directToName) ? Promise.resolve() : copyText(text), copied: text => oncopied(text),
     changed(next) {
       const wasOpen = opened
       const previousText = state.text
@@ -68,7 +69,7 @@
     document.addEventListener('visibilitychange', hidden)
     return () => { capture.cancel(); window.removeEventListener('keydown', keys, true); document.removeEventListener('visibilitychange', hidden); motion.removeEventListener('change', updateMotion) }
   })
-  $: heading = { preparing: 'Getting your microphone ready…', recording: 'Listening', transcribing: 'Transcribing…', ready: 'Your words', copying: directToNote ? 'Sending to note…' : 'Copying…', error: 'Unable to transcribe' }[state.phase]
+  $: heading = { preparing: 'Getting your microphone ready…', recording: 'Listening', transcribing: 'Transcribing…', ready: 'Your words', copying: directToName ? 'Updating name…' : directToNote ? 'Sending to note…' : 'Copying…', error: 'Unable to transcribe' }[state.phase]
 </script>
 
 {#if opened}
@@ -87,12 +88,12 @@
         {:else if state.phase === 'ready'}<p>No text yet. Hold R2 to record.</p>{/if}
       </div>
       {#if state.text}
-        <p class="append-hint" role="status">{state.phase === 'recording' ? 'Keep holding R2. Release to add these words.' : state.phase === 'transcribing' ? 'Transcribing your next words…' : state.phase === 'preparing' ? 'Preparing the microphone. Your text is saved above.' : state.phase === 'copying' ? directToNote ? 'Sending your complete transcript…' : 'Copying your complete transcript…' : directToNote ? 'Hold R2 to add more · □ / X to remove last · × / A to update note' : 'Hold R2 to add more · □ / X to remove last · × / A to copy all text'}</p>
+        <p class="append-hint" role="status">{state.phase === 'recording' ? 'Keep holding R2. Release to add these words.' : state.phase === 'transcribing' ? 'Transcribing your next words…' : state.phase === 'preparing' ? 'Preparing the microphone. Your text is saved above.' : state.phase === 'copying' ? directToName ? 'Sending your name…' : directToNote ? 'Sending your complete transcript…' : 'Copying your complete transcript…' : directToName ? 'Hold R2 to add more · □ / X to remove last · × / A to use name' : directToNote ? 'Hold R2 to add more · □ / X to remove last · × / A to update note' : 'Hold R2 to add more · □ / X to remove last · × / A to copy all text'}</p>
       {/if}
       <footer>
         <button onclick={() => capture.cancel()}><span class="controller-key">○</span>{['preparing', 'recording'].includes(state.phase) ? 'Cancel recording' : 'Dismiss'}</button>
         <button onclick={() => capture.removeLast()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">□</span>Remove last transcription</button>
-        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? (directToNote ? 'Sending…' : 'Copying…') : (directToNote ? 'Update note' : 'Copy all text')}</button>
+        <button class="copy" onclick={() => capture.confirm()} disabled={!state.text || state.phase !== 'ready'}><span class="controller-key">×</span>{state.phase === 'copying' ? (directToName ? 'Sending…' : directToNote ? 'Sending…' : 'Copying…') : (directToName ? 'Use name' : directToNote ? 'Update note' : 'Copy all text')}</button>
       </footer>
     </div>
   </div>
