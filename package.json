@@ -1,0 +1,52 @@
+{
+  "name": "couchcontrol-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CouchControl desktop workspace",
+  "author": "CouchControl contributors",
+  "license": "GPL-3.0",
+  "type": "module",
+  "main": "desktop/main.js",
+  "scripts": {
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build && node desktop/build.js",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "test": "node --test desktop/*.test.js",
+    "test:smoke": "electron . --smoke-test",
+    "package": "npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "org.couchcontrol.desktop",
+    "productName": "CouchControl",
+    "files": [
+      "desktop/**",
+      "package.json",
+      "!desktop/*.test.js",
+      "!desktop/smoke.js"
+    ],
+    "extraResources": [
+      {
+        "from": "frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "desktop/bin",
+        "to": "bin"
+      }
+    ],
+    "linux": {
+      "target": "dir",
+      "category": "Utility"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Record voice commands in CouchControl."
+      }
+    }
+  }
+}

@@ -3,16 +3,21 @@
   import { platformRequest } from '../../lib/platform-api.js'
   import { createCommandSession } from './commands.js'
   import { createRemoteBrowser } from './remote.js'
+  import { createNativeBrowser } from './native.js'
 
   export let title = 'Browser'
+  export let cardId
+  const desktop = window.couchDesktop
+  let viewport, address = ''
   export let initialUrl = ''
   export let active = true
   export let canPaste = () => true
   export let onnavigate = () => {}
   export let onback = () => {}
   let input, state, live = null, connectionError = '', lastUrl = initialUrl
-  const remote = createRemoteBrowser({ request: platformRequest, initialUrl, changed: ({ frame, error }) => {
+  const remote = (desktop ? createNativeBrowser : createRemoteBrowser)({ bridge: desktop, id: String(cardId), request: platformRequest, initialUrl, changed: ({ frame, error }) => {
     live = frame; connectionError = error
+    if (frame?.url && frame.url !== 'about:blank') address = frame.url
     if (frame?.url && /^https?:\/\//i.test(frame.url) && frame.url !== lastUrl) { lastUrl = frame.url; onnavigate(frame.url) }
   } })
   const session = createCommandSession({
@@ -23,7 +28,7 @@
   state = session.state
   $: if (!active) session.cancel()
   $: if (state.busy && !canPaste()) session.cancel()
-  onMount(() => { remote.start() })
+  onMount(() => { remote.start(viewport) })
   onDestroy(() => { session.dispose(); remote.dispose() })
   export function focusNavigation() { input?.focus({ preventScroll: true }) }
   export function captureEmptyInput() { return session.captureEmptyInput() }
@@ -60,7 +65,16 @@
     {:else if state.message}<p>{state.message}</p>{/if}
     <p class="hint">Left stick ↑↓ · Scroll　 R2 · Record　 × / A · Run　 □ / X · Paste　 ← · Clear　 ○ / B · Back</p>
   </div>
-  {#if live?.image && live.url !== 'about:blank'}
+  {#if desktop}
+    <form class="navigation" onsubmit={event => { event.preventDefault(); let url = address.trim(); if (!/^https?:\/\//i.test(url)) url = (/^(localhost|127\.|\[::1\])/.test(url) ? 'http://' : 'https://') + url; void remote.action('navigate', url) }}>
+      <button type="button" aria-label="Go back" disabled={!live?.canBack || state.busy} onclick={() => remote.action('back')}>←</button>
+      <button type="button" aria-label="Go forward" disabled={!live?.canForward || state.busy} onclick={() => remote.action('forward')}>→</button>
+      <button type="button" aria-label="Reload page" disabled={state.busy} onclick={() => remote.action('reload')}>↻</button>
+      <input aria-label="Page address" bind:value={address} placeholder="Enter a web address" disabled={state.busy} />
+      <button type="button" onclick={onback}>Shelf</button>
+    </form>
+    <div class="native-viewport" bind:this={viewport} aria-label="Live website"></div>
+  {:else if live?.image && live.url !== 'about:blank'}
     <div class="preview-area">
       <img src={'data:image/jpeg;base64,' + live.image} alt={'Live browser view: ' + (live.title || live.url)} width={live.width} height={live.height} />
     </div>
@@ -86,6 +100,11 @@
   .feedback .hint { font-size: 11px; color: #aa9984; }
   .error { color: #ffb8a6; }
   .preview-area { flex: 1; min-height: 0; overflow: auto; display: flex; background: #12100e; border-block: 1px solid #ffffff20; }
+  .navigation { margin: 0 20px 12px; padding: 0 8px; gap: 6px; }
+  .navigation input { padding: 10px 4px; font-size: 13px; }
+  .navigation button { border: 0; padding: 8px; color: inherit; background: transparent; cursor: pointer; }
+  .navigation button:disabled { opacity: .35; cursor: default; }
+  .native-viewport { flex: 1; min-height: 0; background: #fff; }
   img { display: block; max-width: 100%; width: auto; height: auto; max-height: 100%; object-fit: contain; object-position: top center; margin-inline: auto; background: white; }
   .welcome { margin: auto; padding: 24px; text-align: center; overflow: auto; }
   h1 { font-size: clamp(26px, 4cqw, 46px); font-weight: 500; margin: 16px 0; }

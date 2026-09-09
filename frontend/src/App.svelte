@@ -15,6 +15,7 @@
   import FolderPicker from './features/folders/FolderPicker.svelte'
   import { FOLDER_PICKER } from './features/folders/context.js'
   import { createFolderQueue } from './features/folders/queue.js'
+  const desktop = window.couchDesktop
   let voiceOverlay
   let panes = {}
   let paneElements = {}
@@ -102,6 +103,8 @@
   let reducedMotion = false
   $: appCatalog = allApps(state).some(app => app.type === 'settings') ? addableApps : availableApps
   $: if (storageReady) saveSwitcher(state, shelfStorage)
+  $: if (desktop && storageReady) desktop.browser('retain', { ids: allApps(state).filter(app => app.type === 'browser').map(app => String(app.id)) }).catch(console.error)
+  $: if (desktop) desktop.browser('visibility', { blocked: state.view !== 'app' || !!state.groupPicker || voiceOpen || !!folderRequest || !!closeRequest || !!renameRequest || closing }).catch(console.error)
   $: appOpen = state.view === 'app'
   $: pickerOpen = state.view === 'picker' || !!state.groupPicker
   $: activeEntry = state.apps[state.selected - 1]
@@ -331,10 +334,18 @@
       surfaceAnimation?.finish()
     })
     observer.observe(cardsViewport)
-    const stopGamepad = startGamepadControls({ onAction: act, onConnection: connected => { controllerConnected = connected }, onStatus: status => { controllerStatus = status } })
+    const unsubscribeDesktop = desktop?.subscribe(event => {
+      if (event.type === 'action') void act(event.action)
+      if (event.type === 'browser-focus' && grouped && !voiceOpen && !folderRequest && !closeRequest && !renameRequest) {
+        const index = activeEntry.apps.findIndex(app => app && String(app.id) === event.id)
+        if (index >= 0 && index !== activeEntry.focused) state = { ...state, apps: state.apps.map(entry => entry.id === activeEntry.id ? { ...entry, focused: index } : entry) }
+      }
+    })
+    const stopGamepad = startGamepadControls({ desktop, onAction: act, onConnection: connected => { controllerConnected = connected }, onStatus: status => { controllerStatus = status } })
     return () => {
       finishFolder(null)
       stopGamepad()
+      unsubscribeDesktop?.()
       observer.disconnect()
       motion.removeEventListener('change', updateMotion)
       layoutMotion.cancel()

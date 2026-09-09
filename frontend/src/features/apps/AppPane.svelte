@@ -35,7 +35,7 @@
   {#if ['codex', 'claude'].includes(definition.id)}
     <CodexApp provider={definition.id} bind:this={codex} title={app.title} sessionKey={sessionTitle(app)} ontitle={path => onupdate({ defaultTitle: folderTitle(path) })} {active} {canPaste} oncancel={onback} />
   {:else if definition.id === 'browser'}
-    <BrowserApp bind:this={browser} title={app.title} initialUrl={app.browserUrl || ''} onnavigate={browserUrl => onupdate({ browserUrl })} {active} {canPaste} {onback} />
+    <BrowserApp cardId={app.id} bind:this={browser} title={app.title} initialUrl={app.browserUrl || ''} onnavigate={browserUrl => onupdate({ browserUrl })} {active} {canPaste} {onback} />
   {:else if definition.id === 'mail'}
     <MailApp draftKey={String(app.id)} bind:this={mail} {active} {canPaste} {onback} />
   {:else if definition.id === 'write'}

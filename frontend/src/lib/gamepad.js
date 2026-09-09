@@ -74,7 +74,7 @@ export function createGamepadReader() {
   }
 }
 
-export function startGamepadControls({ onAction, onConnection, onStatus = () => {}, win = window, doc = document, nav = navigator }) {
+export function startGamepadControls({ onAction, onConnection, onStatus = () => {}, desktop, win = window, doc = document, nav = navigator }) {
   if (typeof nav.getGamepads !== 'function') {
     onStatus(win.isSecureContext === false ? 'insecure' : 'unavailable')
     return () => {}
@@ -105,11 +105,12 @@ export function startGamepadControls({ onAction, onConnection, onStatus = () => 
   }
   // A suspended window may receive no animation frame while it is hidden.
   const listeners = [
-    [win, 'blur', reset], [win, 'focus', resume],
+    ...(!desktop ? [[win, 'blur', reset], [win, 'focus', resume]] : []),
     [win, 'pagehide', reset], [win, 'pageshow', resume],
     [doc, 'visibilitychange', resume],
     [win, 'gamepadconnected', resume], [win, 'gamepaddisconnected', resume],
   ]
+  const unsubscribeDesktop = desktop?.subscribe(event => { if (event.type === 'focus' && !event.focused) reset() })
   for (const [target, type, listener] of listeners) target.addEventListener(type, listener)
 
   function poll(now) {
@@ -117,7 +118,7 @@ export function startGamepadControls({ onAction, onConnection, onStatus = () => 
     // Keep polling even if access temporarily fails during launch or resume.
     request = win.requestAnimationFrame(poll)
     let pads
-    try { pads = Array.from(nav.getGamepads()) } catch {
+    try { pads = Array.from(desktop ? desktop.getGamepads() : nav.getGamepads()) } catch {
       // Browsers may disable controller access through their permissions policy.
       reset()
       identity = null
@@ -137,7 +138,7 @@ export function startGamepadControls({ onAction, onConnection, onStatus = () => 
       connected = Boolean(pad)
       onConnection(connected)
     }
-    if (!pad || doc.hidden || !doc.hasFocus()) {
+    if (!pad || doc.hidden || !(desktop ? desktop.hasFocus() : doc.hasFocus())) {
       reset()
       report(!pad ? (pads.some(pad => pad?.connected) ? 'unsupported' : 'waiting') : 'unfocused')
     } else if (!armed) {
@@ -159,6 +160,7 @@ export function startGamepadControls({ onAction, onConnection, onStatus = () => 
   request = win.requestAnimationFrame(poll)
   return () => {
     stopped = true
+    unsubscribeDesktop?.()
     cancelTrigger()
     win.cancelAnimationFrame(request)
     for (const [target, type, listener] of listeners) target.removeEventListener(type, listener)

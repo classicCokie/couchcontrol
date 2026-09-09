@@ -67,7 +67,7 @@ func main() {
 	s := &server{manager: m, token: token, origins: allowed, hosts: hosts,
 		claude: &server{manager: cm, provider: "claude", token: randomID(), origins: allowed, hosts: hosts}}
 
-	httpServer := &http.Server{Addr: *listen, Handler: s.handler(*staticDir), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	httpServer := &http.Server{Addr: *listen, Handler: desktopAuth(s.handler(*staticDir), os.Getenv("COUCHCONTROL_DESKTOP_TOKEN")), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	defer s.browser.Close()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

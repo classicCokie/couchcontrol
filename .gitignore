@@ -32,3 +32,6 @@ backend/codex/codex-web
 
 # Private notes
 .couchcontrol/notes/
+
+# Desktop build artifacts
+desktop/bin/
