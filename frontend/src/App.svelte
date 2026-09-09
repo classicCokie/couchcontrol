@@ -164,6 +164,9 @@
   }
 
   async function act(action) {
+    const terminalAction = action
+    // Preserve the physical D-pad shortcut for terminals; other surfaces navigate normally.
+    if (action === 'dpad-down') action = 'down'
     // Trigger releases must reach Notes even while another overlay owns input.
     if (action === 'mark-end' || action === 'mark-cancel') { activePane?.control(action); return }
     if (action === 'record-start' && !voiceOpen) {
@@ -175,7 +178,7 @@
     if (renameRequest) { renameDialog?.handleAction(action); return }
     if (state.view === 'menu' && activeEntry && action === 'close-empty') { renameRequest = activeEntry; return }
     if (closing) return
-    if (terminalOpen && terminalApp?.control(action)) return
+    if (terminalOpen && terminalApp?.control(terminalAction)) return
     if (appOpen && grouped && activeApp && action === 'close-empty') {
       closeError = ''
       closeRequest = { ...activeApp, groupId: activeEntry.id }

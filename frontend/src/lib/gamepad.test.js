@@ -30,6 +30,18 @@ test('stick ignores drift and uses its dominant axis', () => {
   assert.deepEqual(read(pad, 2), ['down'])
 })
 
+test('D-pad Down is distinct from left-stick Down and repeats while held', () => {
+  const read = createGamepadReader(), pad = gamepad()
+  pad.axes[1] = 0.8
+  assert.deepEqual(read(pad, 0), ['down'])
+  pad.buttons[13].pressed = true
+  assert.deepEqual(read(pad, 1), ['dpad-down'])
+  assert.deepEqual(read(pad, 400), [])
+  assert.deepEqual(read(pad, 401), ['dpad-down'])
+  pad.buttons[13].pressed = false
+  assert.deepEqual(read(pad, 402), ['down'])
+})
+
 test('face buttons fire only on a new press; Back wins simultaneous presses', () => {
   const read = createGamepadReader(), pad = gamepad()
   pad.buttons[0].pressed = true

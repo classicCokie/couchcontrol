@@ -19,7 +19,7 @@ export function createGamepadReader() {
     const vertical = Number(pressed(13)) - Number(pressed(12))
     let nextDirection = ''
     if (horizontal) nextDirection = horizontal > 0 ? 'right' : 'left'
-    else if (vertical) nextDirection = vertical > 0 ? 'down' : 'up'
+    else if (vertical) nextDirection = vertical > 0 ? 'dpad-down' : 'up'
     else if (Math.max(Math.abs(x), Math.abs(y)) > 0.55) {
       nextDirection = Math.abs(x) >= Math.abs(y)
         ? (x > 0 ? 'right' : 'left') : (y > 0 ? 'down' : 'up')

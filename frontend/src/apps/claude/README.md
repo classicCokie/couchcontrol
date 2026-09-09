@@ -16,7 +16,9 @@ is the keyboard equivalent. Arrow controls navigate Claude's startup dialogs.
 The CLI retains its own workspace trust and permission prompts. It launches
 with `--permission-mode default`; API resume mode adds `--resume`.
 
-Right stick down, Alt+Down, or **Commands** opens Claude-specific quick commands.
+D-pad Down, Alt+Down, or **Commands** opens Claude-specific quick commands.
+Move the right stick up/down to scroll terminal history; hold it to keep scrolling.
+While a native CLI menu is open, D-pad/left-stick up/down navigates that menu.
 **All Claude commands** opens the installed CLI's full command list. Left clears
 a recognized draft; voice auto-paste and commands require a recognized empty
 composer. Detection supports Claude's bordered `❯` prompt and dim/gray suggestion

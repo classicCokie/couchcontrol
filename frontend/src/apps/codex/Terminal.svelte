@@ -15,6 +15,8 @@
   export let canPaste = () => true
   export let canCommand = canPaste
   let host, pasteError = ''
+  let scroll = () => {}
+  export function scrollHistory(lines) { scroll(lines) }
   let focus = () => {}
   export function focusInput() { focus() }
   let paste = () => {}
@@ -49,6 +51,9 @@
     // Keep the app-switcher shortcut out of the CLI's input stream.
     term.attachCustomKeyEventHandler(event => active && canPaste() && !(event.ctrlKey && event.shiftKey && event.key === 'Backspace') && !(event.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'Delete'].includes(event.key)))
     let session, socket, disposed = false, ready = false, ended = false, retry, liveStartup = false
+    scroll = lines => {
+      if (!disposed && active && !document.hidden && canPaste()) term.scrollLines(lines)
+    }
     let inputRevision = 0
     const inputTarget = () => !disposed && !document.hidden && ready && socket?.readyState === WebSocket.OPEN && canPaste() ? socket : null
     captureEmpty = () => inputTarget() && profile.isEmptyComposer(term.buffer.active) ? { socket, revision: inputRevision } : null

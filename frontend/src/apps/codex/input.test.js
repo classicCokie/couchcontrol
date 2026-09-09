@@ -7,6 +7,28 @@ import { isEmptyComposer, composerState } from './composer.js'
 const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
 const write = (term, text) => new Promise(resolve => term.write(text, resolve))
 
+test('scrolling terminal history moves the viewport without sending input or changing the composer', async () => {
+  const term = new Terminal({ cols: 80, rows: 5, scrollback: 100 })
+  const sent = []
+  const subscription = term.onData(data => sent.push(data))
+  try {
+    await write(term, Array.from({ length: 30 }, (_, i) => `Output ${i}\r\n`).join('') + '› ')
+    const bottom = term.buffer.active.baseY
+    const cursor = term.buffer.active.cursorY
+    assert.ok(bottom > 3)
+    term.scrollLines(-3)
+    assert.equal(term.buffer.active.viewportY, bottom - 3)
+    term.scrollLines(-1000)
+    assert.equal(term.buffer.active.viewportY, 0)
+    term.scrollLines(3)
+    assert.equal(term.buffer.active.viewportY, 3)
+    term.scrollLines(1000)
+    assert.equal(term.buffer.active.viewportY, bottom)
+    assert.equal(term.buffer.active.cursorY, cursor)
+    assert.deepEqual(sent, [])
+  } finally { subscription.dispose(); term.dispose() }
+})
+
 test('focus changes and terminal queries do not invalidate a command on an empty xterm prompt', async () => {
   const term = new Terminal({ cols: 80, rows: 24 })
   let revision = 0

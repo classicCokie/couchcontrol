@@ -43,19 +43,23 @@
   }
   export function control(action) {
     if (!active) return false
-    if (menuOpen) { commandMenu?.control(action); return true }
+    if (menuOpen) { commandMenu?.control(action === 'dpad-down' ? 'down' : action); return true }
+    if (action === 'right-stick-up' || action === 'right-stick-down') {
+      terminal?.scrollHistory(action === 'right-stick-up' ? -3 : 3)
+      return true
+    }
     if (nativeMenu && terminal?.isComposerReady()) nativeMenu = false
     if (nativeMenu) {
-      const direction = { 'right-stick-down': 'down', 'right-stick-up': 'up' }[action] || action
+      const direction = action === 'dpad-down' ? 'down' : action
       if (['up', 'down', 'left', 'right', 'back'].includes(direction)) {
         terminal?.pressKey(direction)
         if (direction === 'back') nativeMenu = false
         return true
       }
     }
+    if (action === 'dpad-down') { openCommands(); return true }
     if (provider === 'claude' && !terminal?.isComposerReady() && ['up', 'down', 'right'].includes(action)) { terminal?.pressKey(action); return true }
     if (action === 'left') { inputError = terminal?.clearPrompt() ?? `Wait for ${profile.label} to connect.`; return true }
-    if (action === 'right-stick-down') { openCommands(); return true }
     return false
   }
   export function handleKeydown(event) {
@@ -82,7 +86,7 @@
 {#if menuOpen}
   <CommandMenu bind:this={commandMenu} commands={profile.commands} label={profile.label} error={menuError} onselect={selectCommand} oncancel={cancelCommands} />
 {:else}
-  <button class="commands-button" onclick={openCommands}>Commands <kbd>Right stick ↓</kbd></button>
+  <button class="commands-button" onclick={openCommands}>Commands <kbd>D-pad ↓</kbd><span>Right stick ↑↓ Scroll</span></button>
   {#if inputError}<p class="input-error" role="status">{inputError}</p>{/if}
   {#if nativeMenu}<p class="native-hint">↑ ↓ Choose · × / A Select · ○ Back</p>{/if}
 {/if}

@@ -34,7 +34,10 @@ The **Codex** and **Claude** apps open their respective local CLIs through web
 terminals, backed by one Go service and separate SQLite session histories.
 Claude uses the installed Claude Code CLI and its existing host login. Both apps
 support the folder picker, controller controls, clipboard and voice paste, quick
-commands, reconnecting sessions, and split panes. See the [Claude app notes](frontend/src/apps/claude/README.md)
+commands, reconnecting sessions, and split panes. Move the right stick up/down
+to scroll terminal history; hold it to keep scrolling. D-pad Down opens Commands
+(Alt+Down on the keyboard). In a native CLI menu, D-pad/left-stick up/down selects
+menu items. See the [Claude app notes](frontend/src/apps/claude/README.md)
 for setup and configuration.
 
 Start the backend in one terminal:
